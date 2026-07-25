@@ -14,6 +14,8 @@ from app.integrations.redis.client import close_redis_pool, create_redis_pool
 from app.middleware import logging as logging_mw
 from app.middleware import request_id as request_id_mw
 from app.repository import models as _models  # noqa: F401 — register ORM models
+from routes.crawl import router as crawl_router
+from routes.extraction import router as extraction_router
 
 configure_logging()
 log = logging.getLogger(__name__)
@@ -56,4 +58,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(extraction_router)
+app.include_router(crawl_router)
 app.include_router(api_router, prefix=settings.api_prefix)
