@@ -28,7 +28,7 @@ export function Dialog({ open, onClose, title, description, children, className 
       <button
         type="button"
         aria-label="Close dialog"
-        className="absolute inset-0 bg-foreground/40"
+        className="absolute inset-0 overlay-backdrop"
         onClick={onClose}
       />
       <div

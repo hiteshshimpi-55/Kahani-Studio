@@ -116,6 +116,16 @@ async def render_visual_track(ctx: dict, payload: dict) -> dict:
             await session.rollback()
             raise
 
+async def on_startup(ctx: dict) -> None:
+    from app.agents.graph.checkpointer import init_checkpointer
+
+    await init_checkpointer()
+
+
+async def on_shutdown(ctx: dict) -> None:
+    from app.agents.graph.checkpointer import shutdown_checkpointer
+
+    await shutdown_checkpointer()
 
 
 class WorkerSettings:
@@ -130,3 +140,5 @@ class WorkerSettings:
     ]
     redis_settings = RedisSettings.from_dsn(settings.redis_url)
     max_jobs = 5
+    on_startup = on_startup
+    on_shutdown = on_shutdown

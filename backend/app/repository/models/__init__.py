@@ -1,6 +1,14 @@
+from app.repository.models.audience import SimPatch, SimRun
 from app.repository.models.extraction import AudioContext, ExtractionResult, VideoContext
 from app.repository.models.health import HealthPing
-from app.repository.models.project import Project, ProjectAttachment, ProjectRun, Script
+from app.repository.models.project import (
+    ChatSession,
+    ChatTurn,
+    Project,
+    ProjectAttachment,
+    ProjectRun,
+    Script,
+)
 from app.repository.models.series import (
     CHARACTER_ASSET_KINDS,
     Character,
@@ -16,6 +24,8 @@ __all__ = [
     "AudioContext",
     "Character",
     "CharacterAsset",
+    "ChatSession",
+    "ChatTurn",
     "ExtractionResult",
     "HealthPing",
     "Location",
@@ -25,6 +35,8 @@ __all__ = [
     "ProjectRun",
     "Script",
     "Series",
+    "SimPatch",
+    "SimRun",
     "VideoContext",
     "VisualShotAsset",
     "VisualTrackRecord",

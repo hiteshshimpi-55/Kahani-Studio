@@ -1,10 +1,24 @@
-export type AgentToolStatus = 'pending' | 'running' | 'done' | 'error'
+export type ChatActivityPhase =
+  | 'thinking'
+  | 'figuring'
+  | 'context'
+  | 'writing'
+  | 'rewriting'
+  | 'polishing'
+  | 'idle'
+
+export type ChatActivity = {
+  phase: ChatActivityPhase
+  label: string
+}
+
+export type ChatAction = 'chat' | 'clarify' | 'generate' | 'rewrite' | 'context_note'
 
 export type AgentToolStep = {
   id: string
   label: string
   detail?: string
-  status: AgentToolStatus
+  status: 'pending' | 'running' | 'done' | 'error'
 }
 
 export type ChatMessage = {
@@ -12,17 +26,29 @@ export type ChatMessage = {
   role: 'user' | 'assistant'
   content: string
   createdAt: number
-  tools?: AgentToolStep[]
+  activity?: ChatActivity | null
   scriptPreview?: string
   scriptId?: string
   runId?: string
   isDraft?: boolean
-  status?: 'streaming' | 'complete' | 'error'
+  questions?: string[]
+  kind?: 'user' | 'reply' | 'clarify' | 'generating' | 'script' | 'stopped' | 'context'
+  status?: 'streaming' | 'complete' | 'error' | 'stopped'
+  action?: ChatAction
 }
 
-export const GRAPH_TOOL_STEPS: Omit<AgentToolStep, 'status'>[] = [
-  { id: 'retrieve_context', label: 'Retrieve context', detail: 'Searching project attachments' },
-  { id: 'build_source', label: 'Build source brief', detail: 'Assembling source.md from prompt + RAG' },
-  { id: 'script_writer', label: 'Script Writer', detail: 'Outline → expand audio screenplay' },
-  { id: 'persist', label: 'Write artifacts', detail: 'Saving screenplay package for review' },
+/** Rotating labels while a generation run is in flight (client-side only). */
+export const WRITING_PHRASES = [
+  'Writing your script…',
+  'Shaping dialogue and beats…',
+  'Drafting the audio screenplay…',
+  'Building episode structure…',
+  'Almost there…',
+]
+
+export const REWRITE_PHRASES = [
+  'Reworking the script…',
+  'Applying your notes…',
+  'Revising the draft…',
+  'Polishing the new version…',
 ]

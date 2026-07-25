@@ -5,6 +5,7 @@ import { KissaLoader } from '@/components/ui/kissa-loader'
 import { getScript, listScripts } from '@/features/projects/api/projects-api'
 import { useProject } from '@/features/projects/hooks/use-project'
 import type { ScriptLatest, ScriptSummary } from '@/features/projects/types'
+import { NotFoundView } from '@/features/system/pages/NotFoundPage'
 
 function formatDate(iso: string) {
   try {
@@ -73,7 +74,12 @@ export function ProjectDraftsPage() {
     )
   }
   if (error || !project) {
-    return <p className="text-[13px] text-destructive">{error || 'Not found'}</p>
+    return (
+      <NotFoundView
+        kind="project"
+        detail={error && error !== 'Not found' && error !== 'Project not found' ? error : null}
+      />
+    )
   }
 
   return (

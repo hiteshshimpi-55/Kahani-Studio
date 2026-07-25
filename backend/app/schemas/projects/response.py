@@ -37,10 +37,22 @@ class RunResponse(BaseModel):
     arq_job_id: str | None
     created_at: datetime
     updated_at: datetime
+    session_id: str | None = None
     screenplay_preview: str | None = None
     screenplay_md: str | None = None
     draft_script_id: str | None = None
     is_draft: bool = False
+
+
+class ChatSessionResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    project_id: str
+    title: str
+    created_at: datetime
+    updated_at: datetime
+    run_count: int = 0
 
 
 class ScriptLatestResponse(BaseModel):
@@ -65,3 +77,29 @@ class ScriptSummaryResponse(BaseModel):
 
 class ScriptDetailResponse(ScriptLatestResponse):
     pass
+
+
+class ChatMessageResponse(BaseModel):
+    id: str
+    role: str
+    content: str
+    kind: str
+    created_at: datetime
+    run_id: str | None = None
+    questions: list[str] = []
+    session_id: str | None = None
+    run: RunResponse | None = None
+
+
+class ChatHistoryItem(BaseModel):
+    id: str
+    role: str
+    content: str
+    kind: str
+    created_at: datetime
+    run_id: str | None = None
+    questions: list[str] = []
+    script_preview: str | None = None
+    draft_script_id: str | None = None
+    is_draft: bool = False
+    run_status: str | None = None

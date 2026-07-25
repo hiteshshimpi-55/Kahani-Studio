@@ -1,6 +1,7 @@
 import { apiUrl, parseJson } from '@/lib/api-client'
 
 import type {
+  ChatSession,
   CreateProjectInput,
   Project,
   ProjectAttachment,
@@ -28,6 +29,25 @@ export async function createProject(input: CreateProjectInput): Promise<Project>
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(input),
+  })
+  return parseJson(res)
+}
+
+export async function deleteProject(projectId: string): Promise<void> {
+  const res = await fetch(apiUrl(`/api/v1/projects/${projectId}`), { method: 'DELETE' })
+  if (!res.ok && res.status !== 204) {
+    await parseJson(res)
+  }
+}
+
+export async function listSessions(projectId: string): Promise<ChatSession[]> {
+  const res = await fetch(apiUrl(`/api/v1/projects/${projectId}/sessions`))
+  return parseJson(res)
+}
+
+export async function createSession(projectId: string): Promise<ChatSession> {
+  const res = await fetch(apiUrl(`/api/v1/projects/${projectId}/sessions`), {
+    method: 'POST',
   })
   return parseJson(res)
 }
@@ -75,8 +95,65 @@ export async function startRun(
   return parseJson(res)
 }
 
-export async function listRuns(projectId: string): Promise<ProjectRun[]> {
-  const res = await fetch(apiUrl(`/api/v1/projects/${projectId}/runs`))
+export async function postChatMessage(
+  projectId: string,
+  message: string,
+  sessionId?: string,
+): Promise<{
+  id: string
+  role: string
+  content: string
+  kind: string
+  created_at: string
+  run_id?: string | null
+  questions?: string[]
+  session_id?: string | null
+  run?: ProjectRun | null
+}> {
+  const res = await fetch(apiUrl(`/api/v1/projects/${projectId}/chat/messages`), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message, session_id: sessionId ?? null }),
+  })
+  return parseJson(res)
+}
+
+export async function listChatMessages(
+  projectId: string,
+  sessionId?: string,
+): Promise<
+  Array<{
+    id: string
+    role: string
+    content: string
+    kind: string
+    created_at: string
+    run_id?: string | null
+    questions?: string[]
+    script_preview?: string | null
+    draft_script_id?: string | null
+    is_draft?: boolean
+    run_status?: string | null
+  }>
+> {
+  const qs = sessionId ? `?session_id=${encodeURIComponent(sessionId)}` : ''
+  const res = await fetch(apiUrl(`/api/v1/projects/${projectId}/chat/messages${qs}`))
+  return parseJson(res)
+}
+
+export async function cancelRun(projectId: string, runId: string): Promise<ProjectRun> {
+  const res = await fetch(apiUrl(`/api/v1/projects/${projectId}/runs/${runId}/cancel`), {
+    method: 'POST',
+  })
+  return parseJson(res)
+}
+
+export async function listRuns(
+  projectId: string,
+  sessionId?: string,
+): Promise<ProjectRun[]> {
+  const qs = sessionId ? `?session_id=${encodeURIComponent(sessionId)}` : ''
+  const res = await fetch(apiUrl(`/api/v1/projects/${projectId}/runs${qs}`))
   return parseJson(res)
 }
 

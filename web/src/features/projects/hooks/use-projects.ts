@@ -30,5 +30,10 @@ export function useProjects() {
     return project
   }, [])
 
-  return { projects, loading, error, refresh, create }
+  const remove = useCallback(async (projectId: string) => {
+    await api.deleteProject(projectId)
+    setProjects((prev) => prev.filter((p) => p.id !== projectId))
+  }, [])
+
+  return { projects, loading, error, refresh, create, remove }
 }

@@ -1,9 +1,9 @@
 import { useEffect, useRef } from 'react'
 
 import type { ChatMessage } from '../types'
-import { ChatThinkingIndicator } from './ChatThinkingIndicator'
-import { ChatToolStatus } from './ChatToolStatus'
+import { ChatActivityLine } from './ChatActivityLine'
 import { ScriptResultCard } from './ScriptResultCard'
+import { StreamingText } from './StreamingText'
 
 export function ChatMessageList({
   messages,
@@ -31,6 +31,8 @@ export function ChatMessageList({
     <div className="mx-auto w-full max-w-[760px] space-y-7 px-4 py-6 md:px-6">
       {messages.map((message) => {
         const isUser = message.role === 'user'
+        const isStreaming = message.status === 'streaming'
+
         return (
           <div key={message.id} className={isUser ? 'flex justify-end' : 'flex justify-start'}>
             <div
@@ -44,12 +46,18 @@ export function ChatMessageList({
                 <p className="whitespace-pre-wrap">{message.content}</p>
               ) : (
                 <>
-                  {message.tools?.length ? <ChatToolStatus tools={message.tools} /> : null}
-                  {message.status === 'streaming' && !message.content ? (
-                    <ChatThinkingIndicator />
+                  {isStreaming && message.activity ? (
+                    <ChatActivityLine activity={message.activity} />
                   ) : null}
                   {message.content ? (
-                    <p className="whitespace-pre-wrap">{message.content}</p>
+                    <StreamingText
+                      text={message.content}
+                      active={isStreaming && !message.scriptPreview}
+                    />
+                  ) : isStreaming && !message.activity ? (
+                    <ChatActivityLine
+                      activity={{ phase: 'thinking', label: 'Reading your message…' }}
+                    />
                   ) : null}
                   {message.scriptPreview ? (
                     <ScriptResultCard

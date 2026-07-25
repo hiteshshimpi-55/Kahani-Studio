@@ -24,11 +24,12 @@ const HOLD_MS = 2400
 
 type Props = {
   onSend: (text: string) => void | Promise<void>
+  onStop?: () => void | Promise<void>
   onAttach?: (file: File) => void | Promise<void>
   isStreaming?: boolean
 }
 
-export function ChatEmptyState({ onSend, onAttach, isStreaming }: Props) {
+export function ChatEmptyState({ onSend, onStop, onAttach, isStreaming }: Props) {
   const [uploading, setUploading] = useState(false)
   const [headlineIndex, setHeadlineIndex] = useState(0)
   const [display, setDisplay] = useState('')
@@ -83,6 +84,7 @@ export function ChatEmptyState({ onSend, onAttach, isStreaming }: Props) {
             isStreaming={isStreaming}
             isUploading={uploading}
             onSend={onSend}
+            onStop={onStop}
             onAttach={async (file) => {
               if (!onAttach) return
               setUploading(true)
