@@ -46,7 +46,7 @@ jobs:
           cache-dependency-path: web/package-lock.json
       - run: npm ci
       - name: Install Vercel CLI
-        run: npm install -g vercel@47
+        run: npm install -g vercel@57
       - name: Pull Vercel env
         run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
         env:
