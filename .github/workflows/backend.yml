@@ -82,8 +82,9 @@ jobs:
           image = os.environ["IMAGE"]
           with open("/tmp/td.json") as f:
               td = json.load(f)
+          # describe-task-definition returns read-only fields that register rejects
           for key in ("taskDefinitionArn", "revision", "status", "requiresAttributes",
-                      "compatibilities", "registeredAt", "registeredBy"):
+                      "compatibilities", "registeredAt", "registeredBy", "deregisteredAt"):
               td.pop(key, None)
           for c in td.get("containerDefinitions", []):
               c["image"] = image

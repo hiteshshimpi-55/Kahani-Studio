@@ -48,13 +48,30 @@ output "redis_endpoint" {
   value = module.redis.endpoint
 }
 
+output "redis_url" {
+  value     = module.redis.redis_url
+  sensitive = true
+}
+
+output "allowed_origins" {
+  value = local.allowed_origins
+}
+
 output "artifacts_bucket" {
   value = module.s3.bucket_name
 }
 
 output "app_secret_arn" {
-  description = "Update LLM_API_KEY / ELEVENLABS_API_KEY in this Secrets Manager secret"
+  description = "Secrets Manager JSON for all api/worker runtime env (synced from .env)"
   value       = module.ecs.app_secret_arn
+}
+
+output "api_task_definition_arn" {
+  value = module.ecs.api_task_definition_arn
+}
+
+output "worker_task_definition_arn" {
+  value = module.ecs.worker_task_definition_arn
 }
 
 output "github_actions_role_arn" {
