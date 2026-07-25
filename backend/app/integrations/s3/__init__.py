@@ -12,8 +12,23 @@ from functools import lru_cache
 from pathlib import Path
 
 from app.core.config import settings
+from app.integrations.s3.storage import ArtifactStorage, get_artifact_storage
 
 log = logging.getLogger(__name__)
+
+__all__ = [
+    "ArtifactStorage",
+    "S3NotConfiguredError",
+    "get_artifact_storage",
+    "s3_enabled",
+    "require_bucket",
+    "content_type_for",
+    "upload_file",
+    "download_file",
+    "object_exists",
+    "presigned_url",
+    "s3_uri",
+]
 
 
 class S3NotConfiguredError(RuntimeError):

@@ -40,7 +40,7 @@ function historyToMessages(
           role: 'assistant' as const,
           content:
             item.content ||
-            'Episode ready. Review below — save as a draft to lock Cast and continuity.',
+            'Script ready for approval. Review below — approve to continue production.',
           createdAt,
           kind: 'script' as const,
           runId: item.run_id ?? undefined,
@@ -188,8 +188,8 @@ export function useAgentChat(projectId: string | undefined) {
               updateAssistant(assistantId, {
                 activity: null,
                 content: partNo
-                  ? `Episode ${partNo} is ready. Save as a draft to lock Cast and continuity.`
-                  : 'Episode ready. Save as a draft to lock Cast and continuity.',
+                  ? `Episode ${partNo} script is ready for your approval. Approve to generate audio, then cover art.`
+                  : 'Script is ready for your approval. Approve to generate audio, then cover art.',
                 scriptPreview: preview || 'Script generated successfully.',
                 scriptPackage: (next.package as ChatMessage['scriptPackage']) ?? undefined,
                 scriptId: next.draft_script_id ?? undefined,
@@ -381,8 +381,11 @@ export function useAgentChat(projectId: string | undefined) {
               return
             }
             if (evt.type === 'plot_pitches') {
-              const pitches = (evt as { type: 'plot_pitches'; pitches: PlotPitch[] }).pitches
-              patchStreaming({ plotPitches: pitches })
+              const pitches = evt.pitches
+              patchStreaming({
+                plotPitches: pitches,
+                pitchResearch: evt.research ?? null,
+              })
               return
             }
             if (evt.type === 'run_started') {
@@ -405,7 +408,7 @@ export function useAgentChat(projectId: string | undefined) {
               action = evt.action as ChatMessage['action']
               shouldPollGeneration = evt.kind === 'generating' && Boolean(evt.run_id)
               if (evt.session_id) setActiveSessionId(evt.session_id)
-              const donePitches = (evt as { plot_pitches?: PlotPitch[] }).plot_pitches
+              const donePitches = evt.plot_pitches
               patchStreaming({
                 id: finalId,
                 content,
@@ -414,6 +417,7 @@ export function useAgentChat(projectId: string | undefined) {
                 runId,
                 action,
                 plotPitches: donePitches ?? undefined,
+                pitchResearch: evt.research ?? undefined,
                 activity: shouldPollGeneration ? undefined : null,
                 status: shouldPollGeneration ? 'streaming' : 'complete',
               })

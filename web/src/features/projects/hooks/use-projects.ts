@@ -1,39 +1,100 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useSyncExternalStore } from 'react'
 
 import * as api from '../api/projects-api'
 import type { CreateProjectInput, Project } from '../types'
 
-export function useProjects() {
-  const [projects, setProjects] = useState<Project[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+type ProjectsState = {
+  projects: Project[]
+  loading: boolean
+  error: string | null
+  hydrated: boolean
+}
 
-  const refresh = useCallback(async () => {
-    setLoading(true)
-    setError(null)
+let state: ProjectsState = {
+  projects: [],
+  loading: true,
+  error: null,
+  hydrated: false,
+}
+
+const listeners = new Set<() => void>()
+
+function emit() {
+  for (const listener of listeners) listener()
+}
+
+function setState(patch: Partial<ProjectsState>) {
+  state = { ...state, ...patch }
+  emit()
+}
+
+function subscribe(listener: () => void) {
+  listeners.add(listener)
+  return () => {
+    listeners.delete(listener)
+  }
+}
+
+function getSnapshot() {
+  return state
+}
+
+let refreshPromise: Promise<void> | null = null
+
+async function refreshProjects() {
+  if (refreshPromise) return refreshPromise
+  setState({ loading: true, error: null })
+  refreshPromise = (async () => {
     try {
-      setProjects(await api.listProjects())
+      const projects = await api.listProjects()
+      setState({ projects, loading: false, error: null, hydrated: true })
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load projects')
+      setState({
+        loading: false,
+        error: e instanceof Error ? e.message : 'Failed to load projects',
+        hydrated: true,
+      })
     } finally {
-      setLoading(false)
+      refreshPromise = null
     }
-  }, [])
+  })()
+  return refreshPromise
+}
+
+function ensureHydrated() {
+  if (!state.hydrated && !refreshPromise) {
+    void refreshProjects()
+  }
+}
+
+export function useProjects() {
+  const snapshot = useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
 
   useEffect(() => {
-    void refresh()
-  }, [refresh])
+    ensureHydrated()
+  }, [])
+
+  const refresh = useCallback(async () => {
+    await refreshProjects()
+  }, [])
 
   const create = useCallback(async (input: CreateProjectInput) => {
     const project = await api.createProject(input)
-    setProjects((prev) => [project, ...prev])
+    setState({ projects: [project, ...state.projects] })
     return project
   }, [])
 
   const remove = useCallback(async (projectId: string) => {
     await api.deleteProject(projectId)
-    setProjects((prev) => prev.filter((p) => p.id !== projectId))
+    setState({ projects: state.projects.filter((p) => p.id !== projectId) })
   }, [])
 
-  return { projects, loading, error, refresh, create, remove }
+  return {
+    projects: snapshot.projects,
+    loading: snapshot.loading,
+    error: snapshot.error,
+    refresh,
+    create,
+    remove,
+  }
 }

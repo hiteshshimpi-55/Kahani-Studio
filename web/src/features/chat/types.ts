@@ -21,6 +21,14 @@ export type PlotPitch = {
   tone: string
 }
 
+export type PitchResearchMeta = {
+  extraction?: boolean
+  tavily?: boolean
+  topic?: string | null
+  similar_works?: number
+  sources?: number
+}
+
 export type AgentToolStep = {
   id: string
   label: string
@@ -60,6 +68,7 @@ export type ChatMessage = {
   isDraft?: boolean
   questions?: string[]
   plotPitches?: PlotPitch[]
+  pitchResearch?: PitchResearchMeta | null
   kind?: 'user' | 'reply' | 'discover' | 'clarify' | 'generating' | 'script' | 'stopped' | 'context'
   status?: 'streaming' | 'complete' | 'error' | 'stopped'
   action?: ChatAction

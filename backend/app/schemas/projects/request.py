@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 
@@ -60,3 +62,8 @@ class GenerateScriptAudioRequest(BaseModel):
 class ChatMessageRequest(BaseModel):
     message: str = Field(min_length=1)
     session_id: str | None = None
+
+
+class RejectStageRequest(BaseModel):
+    action: Literal["regenerate", "revise"] = Field(description="regenerate | revise")
+    notes: str | None = Field(default=None, max_length=4000)

@@ -29,7 +29,9 @@ Craft rules for ONE episode (Pocket FM–style serial):
 - Every spoken line: SPEAKER: [emotion/direction] text — never bare dialogue.
 - Place 3–6 concrete [sfx: ...] cues that match the action (phone, rain, footsteps, thunder, etc.).
 - Mirror sfx into parts[0].sfx_cues as plain strings (no "sfx:" prefix).
-- Language: match the user's prompt (hi or en). Hindi should feel serial-thriller vernacular, not textbook.
+- Script language: default to Hindi (hi) unless the user explicitly asks for English.
+  Hindi dialogue/narration should feel serial-thriller vernacular, not textbook.
+  Do not translate discovery/research sections of SOURCE into Hindi.
 - End with a hard cliff_out (one sentence hook for the next episode).
 - Prefer short punchy exchanges + narrator bridges over long speeches.
 - If Series cast is provided in SOURCE, REUSE those character ids/names/voices; only add new characters when the story needs them.
@@ -122,6 +124,14 @@ def normalize_script_package(
     """Light post-parse normalize: single part, duration, sfx_cues from screenplay."""
     package.setdefault("narration_config", narration_config)
     package.setdefault("title", "Untitled")
+    # Regional default: Hindi when language omitted / unknown
+    lang = str(package.get("language") or "").strip().lower()
+    if lang in ("", "null", "none", "auto", "und", "unknown"):
+        package["language"] = "hi"
+    elif lang in ("hindi", "hin", "hindi-in", "hi-in"):
+        package["language"] = "hi"
+    elif lang in ("english", "eng", "en-us", "en-in", "en-gb"):
+        package["language"] = "en"
     package["total_duration_sec"] = int(
         package.get("total_duration_sec") or total_duration_sec
     )
@@ -229,6 +239,9 @@ class ScriptWriterAgent:
         system = (
             "You are an enterprise audio showrunner for Pocket FM–style serials. "
             "You write ONE episode at a time with cinematic tension and concrete SFX. "
+            "Default SCRIPT language is Hindi (hi) unless the user explicitly requests English. "
+            "Web discovery / research in SOURCE may be English — do not translate those notes; "
+            "only write dialogue, narration, and screenplay lines in the script language. "
             "Respond with valid JSON only (no markdown fences)."
         )
 
@@ -243,7 +256,7 @@ narration_config: {axes}
 Return JSON shape:
 {{
   "title": "...",
-  "language": "en"|"hi",
+  "language": "hi",
   "bible": {{"characters": [{{"id","name","role","voice","speech_patterns","arc"}}]}},
   "outline": {{
     "part_number": {part_number},
@@ -254,6 +267,10 @@ Return JSON shape:
     "target_duration_sec": {total_duration_sec}
   }}
 }}
+
+Default script language is "hi" (Hindi). Use "en" only if SOURCE explicitly asks for English.
+Keep outline titles/summaries practical; screenplay dialogue/narration must use the script language.
+Do not rewrite discovery research into Hindi.
 
 SOURCE:
 {source_md[:24000]}
@@ -327,8 +344,12 @@ Return ONLY JSON:
             (ln.strip() for ln in source_md.splitlines() if ln.strip() and not ln.startswith("#")),
             "A mysterious story unfolds.",
         )
-        # Prefer Hindi stub when Devanagari appears in the brief
-        use_hi = bool(re.search(r"[\u0900-\u097F]", source_md)) or "hindi" in source_md.lower()
+        # Default Hindi; English only when explicitly requested
+        lower = source_md.lower()
+        use_en = bool(
+            re.search(r"\b(english|in english|write in english|language:\s*en)\b", lower)
+        ) and not bool(re.search(r"[\u0900-\u097F]", source_md))
+        use_hi = not use_en
         if use_hi:
             title = f"एपिसोड {part_number}"
             screenplay = (

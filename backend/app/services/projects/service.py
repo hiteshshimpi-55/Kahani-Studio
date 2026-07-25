@@ -33,6 +33,7 @@ from app.schemas.projects.request import (
     CreateProjectRequest,
     GenerateScriptAudioRequest,
     PinScriptRequest,
+    RejectStageRequest,
     SaveDraftRequest,
     StartRunRequest,
     UpdateCharacterRequest,
@@ -45,12 +46,19 @@ from app.schemas.projects.response import (
     ChatMessageResponse,
     ChatSessionResponse,
     ProjectResponse,
+    RunArtifactsResponse,
+    RunProgressResponse,
     RunResponse,
     ScriptAudioStatusResponse,
     ScriptDetailResponse,
     ScriptLatestResponse,
     ScriptSummaryResponse,
     StoryContextSummaryResponse,
+)
+from app.services.projects.stages import (
+    StagesService,
+    default_stage_statuses,
+    ensure_stage_statuses,
 )
 from app.services.projects.continuity import (
     bible_characters,
@@ -274,6 +282,8 @@ class ProjectsService:
             part_count=1,
             total_duration_sec=duration,
             part_number=part_number,
+            current_stage="script",
+            stage_statuses={**default_stage_statuses(), "script": "generating"},
         )
         run = await self._runs.create(run)
         # LangGraph thread id = run id (checkpoints keyed per generation run)
@@ -835,12 +845,96 @@ class ProjectsService:
             title=package_title(package),
         )
 
+    async def approve_stage(self, project_id: str, run_id: str, stage: str) -> RunResponse:
+        await self._require_project(project_id)
+        run = await StagesService(self._session, self._redis).approve_stage(
+            project_id, run_id, stage
+        )
+        return await self._run_response(run)
+
+    async def reject_stage(
+        self,
+        project_id: str,
+        run_id: str,
+        stage: str,
+        body: RejectStageRequest,
+    ) -> RunResponse:
+        await self._require_project(project_id)
+        run = await StagesService(self._session, self._redis).reject_stage(
+            project_id,
+            run_id,
+            stage,
+            action=body.action,
+            notes=body.notes,
+        )
+        return await self._run_response(run)
+
+    async def start_visuals(self, project_id: str, run_id: str) -> RunResponse:
+        await self._require_project(project_id)
+        run = await StagesService(self._session, self._redis).start_visuals(
+            project_id, run_id
+        )
+        return await self._run_response(run)
+
+    async def skip_visuals(self, project_id: str, run_id: str) -> RunResponse:
+        await self._require_project(project_id)
+        run = await StagesService(self._session, self._redis).skip_visuals(
+            project_id, run_id
+        )
+        return await self._run_response(run)
+
+    async def get_run_audio_file_path(self, project_id: str, run_id: str) -> Path:
+        await self._require_project(project_id)
+        run = await self._runs.get(run_id)
+        if not run or run.project_id != project_id or not run.audio_s3_key:
+            raise AppError(code="NOT_FOUND", message="Audio not found", http_status_code=404)
+        try:
+            return get_artifact_storage().ensure_local(run.audio_s3_key)
+        except FileNotFoundError as exc:
+            raise AppError(
+                code="NOT_FOUND", message="Audio file missing", http_status_code=404
+            ) from exc
+
+    async def get_run_cover_file_path(self, project_id: str, run_id: str) -> Path:
+        await self._require_project(project_id)
+        run = await self._runs.get(run_id)
+        if not run or run.project_id != project_id or not run.cover_s3_key:
+            raise AppError(code="NOT_FOUND", message="Cover not found", http_status_code=404)
+        try:
+            return get_artifact_storage().ensure_local(run.cover_s3_key)
+        except FileNotFoundError as exc:
+            raise AppError(
+                code="NOT_FOUND", message="Cover file missing", http_status_code=404
+            ) from exc
+
     async def _run_response(self, run: ProjectRun) -> RunResponse:
+        # After flush/onupdate, updated_at can be expired — refresh before sync validate.
+        try:
+            await self._session.refresh(run)
+        except Exception:
+            logger.exception("run_response_refresh_failed run_id=%s", getattr(run, "id", None))
         base = RunResponse.model_validate(run)
         draft = await self._scripts.get_for_run(run.id)
         screenplay = ""
         package: dict | None = None
-        if run.status == "succeeded":
+        # Show screenplay once script stage has produced artifacts
+        statuses = ensure_stage_statuses(run)
+        # Legacy runs (pre-stages): treat succeeded scripts as awaiting approval
+        if (
+            run.status == "succeeded"
+            and not run.current_stage
+            and not (isinstance(run.stage_statuses, dict) and run.stage_statuses)
+        ):
+            statuses = {
+                **default_stage_statuses(),
+                "script": "pending_approval",
+            }
+        script_ready = statuses.get("script") in (
+            "pending_approval",
+            "approved",
+            "generating",
+        ) or run.status == "succeeded"
+        if script_ready or run.status in ("succeeded", "running", "queued"):
             if draft:
                 screenplay = read_screenplay_artifact(draft.screenplay_path)
                 package = draft.package_json if isinstance(draft.package_json, dict) else None
@@ -850,6 +944,9 @@ class ProjectsService:
                 loaded = read_run_package(run.project_id, run.id)
                 package = loaded if loaded else None
         preview = screenplay[:1200] if screenplay else None
+        stages = StagesService(self._session, self._redis)
+        artifacts = stages.artifacts_payload(run)
+        progress = stages.progress_payload(run)
         return base.model_copy(
             update={
                 "screenplay_md": screenplay or None,
@@ -859,6 +956,12 @@ class ProjectsService:
                 "is_draft": draft is not None,
                 "part_count": run.part_count,
                 "total_duration_sec": run.total_duration_sec,
+                "current_stage": run.current_stage
+                or ("script" if statuses.get("script") == "pending_approval" else "script"),
+                "stage_statuses": statuses,
+                "artifacts": RunArtifactsResponse(**artifacts),
+                "progress": RunProgressResponse(**progress) if progress else None,
+                "revision_notes": run.revision_notes,
             }
         )
 

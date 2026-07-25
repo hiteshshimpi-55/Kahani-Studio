@@ -1,18 +1,31 @@
-import { Sparkles } from 'lucide-react'
+import { Globe2, Sparkles } from 'lucide-react'
 
-import type { PlotPitch } from '../types'
+import type { PitchResearchMeta, PlotPitch } from '../types'
 
 type Props = {
   pitches: PlotPitch[]
+  research?: PitchResearchMeta | null
   onPick?: (pitch: PlotPitch, index: number) => void
   disabled?: boolean
 }
 
-export function PlotPitchCards({ pitches, onPick, disabled }: Props) {
+export function PlotPitchCards({ pitches, research, onPick, disabled }: Props) {
   if (!pitches.length) return null
 
   return (
     <div className="chat-tool-enter mt-4 space-y-3">
+      {research?.tavily ? (
+        <p className="flex items-center gap-1.5 text-[11px] font-medium text-[var(--text-muted)]">
+          <Globe2 className="h-3 w-3 shrink-0" />
+          Web research used
+          {research.topic ? (
+            <span className="text-[var(--text-secondary)]">· {research.topic}</span>
+          ) : null}
+          {typeof research.sources === 'number' && research.sources > 0 ? (
+            <span>· {research.sources} sources</span>
+          ) : null}
+        </p>
+      ) : null}
       {pitches.map((pitch, i) => (
         <button
           key={pitch.title}

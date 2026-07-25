@@ -82,6 +82,9 @@ def build_source(state: ProjectGraphState) -> dict[str, Any]:
         f"- part_number: {part_number}",
         f"- target_duration_sec: {duration}",
         "- Write exactly ONE episode/part for this request.",
+        "- Script language: hi (Hindi) unless the user prompt explicitly requests English.",
+        "- Write the screenplay / dialogue / narration in that script language.",
+        "- Discovery research below may be in English — do NOT translate research notes into Hindi; use them as English context only.",
         "",
         "## Series cast (locked)",
         "",
@@ -123,6 +126,22 @@ def build_source(state: ProjectGraphState) -> dict[str, Any]:
             lines.append("")
             lines.append(text.strip())
             lines.append("")
+
+    discovery = (state.get("discovery_md") or "").strip()
+    lines.append("## Web discovery research (Tavily)")
+    lines.append("")
+    if discovery:
+        lines.append(
+            "Use this research for setting authenticity, character texture, "
+            "and reference tone. Keep research notes as-is (usually English). "
+            "Do not copy verbatim — adapt into the script language for dialogue/narration only."
+        )
+        lines.append("")
+        lines.append(discovery)
+        lines.append("")
+    else:
+        lines.append("_No web discovery available for this run._")
+        lines.append("")
 
     source_md = "\n".join(lines).strip() + "\n"
     out = runs_dir(state["project_id"], state["run_id"]) / "source.md"

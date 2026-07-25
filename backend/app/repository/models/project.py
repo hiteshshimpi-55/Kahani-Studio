@@ -133,6 +133,15 @@ class ProjectRun(TimestampMixin, Base):
     part_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
     total_duration_sec: Mapped[int | None] = mapped_column(Integer, nullable=True)
     part_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Production pipeline: script → audio → cover_art → assembly → complete
+    current_stage: Mapped[str | None] = mapped_column(
+        String(32), nullable=True, default="script"
+    )
+    stage_statuses: Mapped[dict | None] = mapped_column(JsonType, nullable=True)
+    audio_s3_key: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    cover_s3_key: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    manifest_s3_key: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    revision_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),

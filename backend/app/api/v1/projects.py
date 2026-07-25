@@ -10,6 +10,7 @@ from app.schemas.projects.request import (
     CreateProjectRequest,
     GenerateScriptAudioRequest,
     PinScriptRequest,
+    RejectStageRequest,
     SaveDraftRequest,
     StartRunRequest,
     UpdateCharacterRequest,
@@ -216,6 +217,85 @@ async def save_run_as_draft(
     db: AsyncSession = Depends(get_db),
 ) -> ScriptDetailResponse:
     return await _service(request, db).save_run_as_draft(project_id, run_id, body)
+
+
+@router.post(
+    "/{project_id}/runs/{run_id}/stages/{stage}/approve",
+    response_model=RunResponse,
+)
+async def approve_stage(
+    project_id: str,
+    run_id: str,
+    stage: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+) -> RunResponse:
+    return await _service(request, db).approve_stage(project_id, run_id, stage)
+
+
+@router.post(
+    "/{project_id}/runs/{run_id}/stages/{stage}/reject",
+    response_model=RunResponse,
+)
+async def reject_stage(
+    project_id: str,
+    run_id: str,
+    stage: str,
+    body: RejectStageRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+) -> RunResponse:
+    return await _service(request, db).reject_stage(project_id, run_id, stage, body)
+
+
+@router.post(
+    "/{project_id}/runs/{run_id}/visuals/start",
+    response_model=RunResponse,
+)
+async def start_run_visuals(
+    project_id: str,
+    run_id: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+) -> RunResponse:
+    """Optional: after audio, build lookbook + scene stills for this run."""
+    return await _service(request, db).start_visuals(project_id, run_id)
+
+
+@router.post(
+    "/{project_id}/runs/{run_id}/visuals/skip",
+    response_model=RunResponse,
+)
+async def skip_run_visuals(
+    project_id: str,
+    run_id: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+) -> RunResponse:
+    """Decline companion visuals and continue the cover/assembly path."""
+    return await _service(request, db).skip_visuals(project_id, run_id)
+
+
+@router.get("/{project_id}/runs/{run_id}/audio/file")
+async def get_run_audio_file(
+    project_id: str,
+    run_id: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+) -> FileResponse:
+    path = await _service(request, db).get_run_audio_file_path(project_id, run_id)
+    return FileResponse(path, media_type="audio/mpeg", filename="episode.mp3")
+
+
+@router.get("/{project_id}/runs/{run_id}/cover")
+async def get_run_cover_file(
+    project_id: str,
+    run_id: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+) -> FileResponse:
+    path = await _service(request, db).get_run_cover_file_path(project_id, run_id)
+    return FileResponse(path, media_type="image/png", filename="cover.png")
 
 
 @router.get("/{project_id}/scripts/latest", response_model=ScriptLatestResponse)

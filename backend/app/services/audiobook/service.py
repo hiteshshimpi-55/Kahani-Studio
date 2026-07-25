@@ -250,14 +250,25 @@ _DASH_BEAT_RE = re.compile(r"\s+[—–-]\s+")
 _MULTI_DOT_RE = re.compile(r"\.{3,}")
 
 
+_MD_EMPHASIS_RE = re.compile(r"^\*+([^*]+)\*+$")
+_MD_EMPHASIS_INLINE_RE = re.compile(r"\*([^*]+)\*")
+
+
 def _prep_text_for_tts(text: str, direction: str, role: str) -> str:
     """Punctuation-level pacing prep applied before synthesis.
 
+    - strip markdown *emphasis* (eleven_v3 returns empty audio for ``*sound*``)
     - spaced dashes → ellipsis beats (both engines honour "…" as a beat)
     - dramatic directions get a trailing beat so the line can land
     - narrator paragraph starts stay clean (no leading fillers)
     """
     t = text.strip()
+    # ``*हिनहिनाहट*`` → empty ElevenLabs v3 response; strip emphasis markers.
+    m = _MD_EMPHASIS_RE.match(t)
+    if m:
+        t = m.group(1).strip()
+    else:
+        t = _MD_EMPHASIS_INLINE_RE.sub(r"\1", t)
     t = _MULTI_DOT_RE.sub("…", t)
     t = _DASH_BEAT_RE.sub("… ", t)
 
@@ -344,16 +355,15 @@ _HIGH_STABILITY_HINTS = frozenset(
 def _stability_for_direction(direction: str) -> float:
     """Map acting direction to ElevenLabs stability.
 
-    v3 guidance: tags respond best around 0.3-0.5 (Creative/Natural);
-    high stability mutes the emotion.  We fix a per-voice seed for
-    consistency, so we can afford lower stability for expressiveness.
+    eleven_v3 only accepts discrete stability: 0.0 (Creative), 0.5 (Natural),
+    1.0 (Robust). Intermediate values are rounded / unreliable.
     """
     tokens = set(direction.lower().replace(",", " ").split())
     if tokens & _LOW_STABILITY_HINTS:
-        return 0.42
+        return 0.0
     if tokens & _HIGH_STABILITY_HINTS:
-        return 0.72
-    return 0.58
+        return 1.0
+    return 0.5
 
 
 def _speed_for_role(role: str, direction: str) -> float | None:
@@ -1271,12 +1281,14 @@ class AudiobookService:
                     stability = _stability_for_direction(line.direction)
                     speed = _speed_for_role(role, line.direction)
 
+                    # eleven_v3 auto-detects language; forcing "hi" can fail on some voices.
+                    el_lang = None if (language or "").startswith("hi") else language
                     result = tts.synthesize(
                         SynthesizeSpeechRequest(
                             text=spoken,
                             voice_id=voice_id,
                             model_id=settings.elevenlabs_default_model_id,
-                            language_code=language,
+                            language_code=el_lang,
                             series_id=series_id,
                             seq_id=line.seq_id,
                             seed=voice_seeds.get(voice_id),

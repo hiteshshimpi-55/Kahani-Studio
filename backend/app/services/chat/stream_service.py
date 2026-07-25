@@ -24,7 +24,11 @@ from app.repository.projects import (
 )
 from app.schemas.projects.request import ChatMessageRequest
 from app.services.chat.activity import ChatAction, ChatPhase, phases_for_action, pick_phrase
-from app.services.chat.orchestrator import analyze_user_message, generate_plot_pitches
+from app.services.chat.orchestrator import (
+    analyze_user_message,
+    generate_plot_pitches,
+    research_story_context,
+)
 from app.services.chat.sse import paced_status, sse_event, stream_text_deltas
 
 logger = logging.getLogger(__name__)
@@ -174,21 +178,37 @@ class ChatStreamService:
 
         reply = _soften_reply(str(analysis.get("reply") or ""), action)
 
-        # ── Discover: pitch plots ─────────────────────────────────────────
+        # ── Discover: research-backed pitch plots (extraction + Tavily) ───
         if action == "discover":
-            pitches_from_analysis = analysis.get("plot_pitches")
-
-            if pitches_from_analysis and isinstance(pitches_from_analysis, list) and len(pitches_from_analysis) > 0:
-                pitches = pitches_from_analysis
-            else:
-                pitch_result = await generate_plot_pitches(
-                    user_message=message,
-                    history=history,
-                    attachment_count=len(attachments),
+            # Always run generate_plot_pitches so vague prompts get Tavily too —
+            # do not trust analyze-time pitches (those skip web research).
+            pitch_result = await generate_plot_pitches(
+                user_message=message,
+                history=history,
+                attachment_count=len(attachments),
+            )
+            pitches = pitch_result.get("pitches", [])
+            research = pitch_result.get("research") or {
+                "extraction": False,
+                "tavily": False,
+                "topic": None,
+            }
+            if not pitches:
+                # Fallback to any analyze-time pitches if research path failed
+                fallback = analysis.get("plot_pitches")
+                if isinstance(fallback, list):
+                    pitches = fallback
+            research_reply = str(pitch_result.get("reply") or "").strip()
+            if research_reply and (
+                not reply
+                or reply
+                in (
+                    "Here are some directions I'm excited about:",
+                    "Here are some directions I'm thinking:",
+                    "Here are 3 ideas I'm excited about:",
                 )
-                pitches = pitch_result.get("pitches", [])
-                if not reply or reply == "Here are some directions I'm excited about:":
-                    reply = pitch_result.get("reply", reply)
+            ):
+                reply = research_reply
 
             content = reply or "Here are 3 story directions — pick one and I'll start writing:"
 
@@ -198,6 +218,7 @@ class ChatStreamService:
             yield sse_event({
                 "type": "plot_pitches",
                 "pitches": pitches,
+                "research": research,
             })
 
             _, persisted_id = await append_turn(
@@ -207,7 +228,12 @@ class ChatStreamService:
                 assistant_text=content,
                 kind="discover",
                 questions=[],
-                analysis={**analysis, "action": action, "plot_pitches": pitches},
+                analysis={
+                    **analysis,
+                    "action": action,
+                    "plot_pitches": pitches,
+                    "research": research,
+                },
             )
             yield sse_event(
                 {
@@ -218,6 +244,7 @@ class ChatStreamService:
                     "session_id": session.id,
                     "action": action,
                     "plot_pitches": pitches,
+                    "research": research,
                     "created_at": now.isoformat(),
                 }
             )
@@ -255,8 +282,38 @@ class ChatStreamService:
             )
             return
 
-        # ── generate / rewrite — short intro, then worker run ─────────────
-        if not reply:
+        # ── generate / rewrite — research first, then worker run ───────────
+        brief = str(analysis.get("generation_brief") or message).strip()
+
+        # Real extraction + Tavily BEFORE writing (not a fake status flash).
+        async for evt in paced_status(
+            phase="discovering",
+            label=pick_phrase("discovering", seed=f"{assistant_id}:research"),
+            action=action,
+            hold_ms=0,
+        ):
+            yield evt
+
+        discovery_md = ""
+        research_meta: dict[str, Any] = {
+            "extraction": False,
+            "tavily": False,
+            "topic": None,
+        }
+        try:
+            research_result = await research_story_context(brief or message)
+            discovery_md = str(research_result.get("discovery_md") or "")
+            research_meta = research_result.get("research") or research_meta
+        except Exception:
+            logger.exception("generate_pre_research_failed — continuing without web research")
+
+        if research_meta.get("tavily"):
+            reply = (
+                "I've pulled some context on this — starting your script now."
+                if action == "generate"
+                else "I've refreshed the research — reworking the script with your notes."
+            )
+        elif not reply:
             reply = (
                 "Starting on your script now — I'll let you know when it's ready."
                 if action == "generate"
@@ -267,8 +324,9 @@ class ChatStreamService:
         async for evt in stream_text_deltas(content):
             yield evt
 
-        brief = str(analysis.get("generation_brief") or message).strip()
         part_number = (await self._scripts.max_part_number(project_id)) + 1
+
+        from app.services.projects.stages import default_stage_statuses
 
         run = ProjectRun(
             project_id=project_id,
@@ -279,12 +337,23 @@ class ChatStreamService:
             part_count=1,
             total_duration_sec=DEFAULT_EPISODE_DURATION_SEC,
             part_number=part_number,
+            current_stage="script",
+            stage_statuses={**default_stage_statuses(), "script": "generating"},
         )
         run = await self._runs.create(run)
         await self._runs.update_status(
             run.id, status=run.status, langgraph_thread_id=run.id
         )
         await self._session.commit()
+
+        # Persist chat-time research so LangGraph can skip a duplicate crawl.
+        if discovery_md.strip():
+            try:
+                from app.agents.graph.nodes_discovery import _persist_discovery
+
+                _persist_discovery(project_id, run.id, discovery_md)
+            except Exception:
+                logger.exception("generate_discovery_persist_failed")
 
         if self._redis is None:
             raise AppError(
@@ -309,7 +378,7 @@ class ChatStreamService:
             kind="generating",
             run_id=run.id,
             questions=[],
-            analysis={**analysis, "action": action},
+            analysis={**analysis, "action": action, "research": research_meta},
         )
 
         writing_phase: ChatPhase = "rewriting" if action == "rewrite" else "writing"
@@ -322,6 +391,7 @@ class ChatStreamService:
                 "content": content,
                 "session_id": session.id,
                 "action": action,
+                "research": research_meta,
                 "created_at": now.isoformat(),
             }
         )

@@ -9,6 +9,7 @@ from typing import Any
 
 from app.agents.graph.checkpointer import ensure_checkpoint_tables, get_checkpointer
 from app.agents.graph.nodes_context import build_source, retrieve_context
+from app.agents.graph.nodes_discovery import discover_research
 from app.agents.graph.state import ProjectGraphState
 from app.agents.script_writer.agent import ScriptWriterAgent, default_narration_config
 
@@ -46,12 +47,14 @@ def build_project_graph(*, checkpointer: Any | None = None):
 
     graph = StateGraph(ProjectGraphState)
     graph.add_node("retrieve_context", retrieve_context)
+    graph.add_node("discover_research", discover_research)
     graph.add_node("build_source", build_source)
     graph.add_node("script_writer", script_writer_node)
     graph.add_node("persist_artifacts", _noop_persist)
 
     graph.set_entry_point("retrieve_context")
-    graph.add_edge("retrieve_context", "build_source")
+    graph.add_edge("retrieve_context", "discover_research")
+    graph.add_edge("discover_research", "build_source")
     graph.add_edge("build_source", "script_writer")
     graph.add_edge("script_writer", "persist_artifacts")
     graph.add_edge("persist_artifacts", END)
@@ -107,6 +110,7 @@ async def _fallback_node_loop(
     state: dict[str, Any] = dict(initial)
     steps: list[Callable[..., Any]] = [
         retrieve_context,
+        discover_research,
         build_source,
         script_writer_node,
         _noop_persist,

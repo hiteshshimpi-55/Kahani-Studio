@@ -35,7 +35,10 @@ Rules:
 
 
 def _get_client() -> OpenAI:
-    return OpenAI(api_key=settings.openai_api_key)
+    key = settings.effective_llm_api_key
+    if not key:
+        raise RuntimeError("LLM_API_KEY / OPENAI_API_KEY is not set")
+    return OpenAI(api_key=key)
 
 
 def extract_content(user_prompt: str) -> ExtractionResponse:
@@ -49,10 +52,11 @@ def extract_content(user_prompt: str) -> ExtractionResponse:
         ExtractionResponse with topic, characters, plot, video/audio keywords, and overall context.
     """
     client = _get_client()
-    log.info("openai_extract_start model=%r", settings.openai_model)
+    model = (settings.llm_model or settings.openai_model or "gpt-4o").strip()
+    log.info("openai_extract_start model=%r", model)
 
     completion = client.beta.chat.completions.parse(
-        model=settings.openai_model,
+        model=model,
         messages=[
             {"role": "system", "content": SYSTEM_PROMPT},
             {

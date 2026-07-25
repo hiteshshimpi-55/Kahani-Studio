@@ -3,7 +3,7 @@ import { useEffect, useRef } from 'react'
 import type { ChatMessage, PlotPitch } from '../types'
 import { ChatActivityLine } from './ChatActivityLine'
 import { PlotPitchCards } from './PlotPitchCards'
-import { ScriptResultCard } from './ScriptResultCard'
+import { ProductionCard } from './ProductionCard'
 import { StreamingText } from './StreamingText'
 
 export function ChatMessageList({
@@ -80,12 +80,13 @@ export function ChatMessageList({
                   {message.plotPitches && message.plotPitches.length > 0 ? (
                     <PlotPitchCards
                       pitches={message.plotPitches}
+                      research={message.pitchResearch}
                       disabled={streaming}
                       onPick={(pitch) => onPickPlot?.(pitch)}
                     />
                   ) : null}
                   {message.scriptPreview ? (
-                    <ScriptResultCard
+                    <ProductionCard
                       projectId={projectId}
                       scriptId={message.scriptId}
                       runId={message.runId}

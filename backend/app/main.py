@@ -10,7 +10,10 @@ from app.api import error_handlers
 from app.api.router import router
 from app.core.config import settings
 from app.core.db.session import Base, engine
+from app.core.logging import configure_logging
 from app.integrations.redis.client import close_redis_pool, create_redis_pool
+
+configure_logging()
 
 # Import all models so SQLAlchemy metadata picks them up for create_all
 import app.repository.models.audience  # noqa: F401
@@ -45,6 +48,43 @@ async def _ensure_schema() -> None:
             text(
                 "ALTER TABLE project_runs "
                 "ADD COLUMN IF NOT EXISTS part_number INTEGER"
+            )
+        )
+        # Staged production pipeline columns
+        await conn.execute(
+            text(
+                "ALTER TABLE project_runs "
+                "ADD COLUMN IF NOT EXISTS current_stage VARCHAR(32)"
+            )
+        )
+        await conn.execute(
+            text(
+                "ALTER TABLE project_runs "
+                "ADD COLUMN IF NOT EXISTS stage_statuses JSONB"
+            )
+        )
+        await conn.execute(
+            text(
+                "ALTER TABLE project_runs "
+                "ADD COLUMN IF NOT EXISTS audio_s3_key VARCHAR(1024)"
+            )
+        )
+        await conn.execute(
+            text(
+                "ALTER TABLE project_runs "
+                "ADD COLUMN IF NOT EXISTS cover_s3_key VARCHAR(1024)"
+            )
+        )
+        await conn.execute(
+            text(
+                "ALTER TABLE project_runs "
+                "ADD COLUMN IF NOT EXISTS manifest_s3_key VARCHAR(1024)"
+            )
+        )
+        await conn.execute(
+            text(
+                "ALTER TABLE project_runs "
+                "ADD COLUMN IF NOT EXISTS revision_notes TEXT"
             )
         )
 

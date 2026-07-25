@@ -2,6 +2,60 @@ export type IndexStatus = 'pending' | 'indexed' | 'failed'
 
 export type RunStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled'
 
+export type ProductionStage = 'script' | 'audio' | 'cover_art' | 'assembly' | 'complete'
+
+export type StageStatus =
+  | 'idle'
+  | 'generating'
+  | 'pending_approval'
+  | 'approved'
+  | 'rejected'
+  | 'failed'
+
+export interface RunArtifacts {
+  screenplay_key?: string | null
+  package_key?: string | null
+  audio_key?: string | null
+  cover_key?: string | null
+  manifest_key?: string | null
+  audio_url?: string | null
+  cover_url?: string | null
+  visuals_series_id?: string | null
+  visuals_url?: string | null
+}
+
+export interface VisualEpisodeStatus {
+  series_id: string
+  status: string
+  plan?: {
+    title?: string
+    characters?: Array<{
+      id?: string
+      name?: string
+      reference_image?: string | null
+    }>
+    shots?: Array<{
+      shot_id?: string
+      scene_id?: string
+      prompt_brief?: string
+      t_start?: number
+      t_end?: number
+    }>
+  } | null
+  lookbook?: Record<string, string>
+  stills?: Record<string, string>
+  video_url?: string | null
+  shot_count?: number
+  characters_ready?: boolean
+  duration_sec?: number | null
+}
+
+export interface RunProgress {
+  total_lines?: number | null
+  lines_rendered?: number | null
+  duration_sec?: number | null
+  current_step?: string | null
+}
 
 export interface Project {
   id: string
@@ -39,6 +93,11 @@ export interface ProjectRun {
   package?: ScriptPackage | null
   draft_script_id?: string | null
   is_draft?: boolean
+  current_stage?: ProductionStage | string | null
+  stage_statuses?: Partial<Record<ProductionStage | string, StageStatus | string>> | null
+  artifacts?: RunArtifacts | null
+  progress?: RunProgress | null
+  revision_notes?: string | null
 }
 
 export interface BibleCharacter {

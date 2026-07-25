@@ -26,6 +26,25 @@ class AttachmentResponse(BaseModel):
     created_at: datetime
 
 
+class RunArtifactsResponse(BaseModel):
+    screenplay_key: str | None = None
+    package_key: str | None = None
+    audio_key: str | None = None
+    cover_key: str | None = None
+    manifest_key: str | None = None
+    audio_url: str | None = None
+    cover_url: str | None = None
+    visuals_series_id: str | None = None
+    visuals_url: str | None = None
+
+
+class RunProgressResponse(BaseModel):
+    total_lines: int | None = None
+    lines_rendered: int | None = None
+    duration_sec: float | None = None
+    current_step: str | None = None
+
+
 class RunResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -46,6 +65,11 @@ class RunResponse(BaseModel):
     draft_script_id: str | None = None
     is_draft: bool = False
     cast_updated: bool = False
+    current_stage: str | None = None
+    stage_statuses: dict[str, str] | None = None
+    artifacts: RunArtifactsResponse | None = None
+    progress: RunProgressResponse | None = None
+    revision_notes: str | None = None
 
 
 class ChatSessionResponse(BaseModel):

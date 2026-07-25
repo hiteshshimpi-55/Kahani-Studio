@@ -11,6 +11,7 @@ import type {
   ScriptSummary,
   StartRunInput,
   StoryContextSummary,
+  VisualEpisodeStatus,
 } from '../types'
 
 export async function listProjects(): Promise<Project[]> {
@@ -160,6 +161,62 @@ export async function listRuns(
 
 export async function getRun(projectId: string, runId: string): Promise<ProjectRun> {
   const res = await fetch(apiUrl(`/api/v1/projects/${projectId}/runs/${runId}`))
+  return parseJson(res)
+}
+
+export async function approveStage(
+  projectId: string,
+  runId: string,
+  stage: string,
+): Promise<ProjectRun> {
+  const res = await fetch(
+    apiUrl(`/api/v1/projects/${projectId}/runs/${runId}/stages/${stage}/approve`),
+    { method: 'POST' },
+  )
+  return parseJson(res)
+}
+
+export async function rejectStage(
+  projectId: string,
+  runId: string,
+  stage: string,
+  body: { action: 'regenerate' | 'revise'; notes?: string },
+): Promise<ProjectRun> {
+  const res = await fetch(
+    apiUrl(`/api/v1/projects/${projectId}/runs/${runId}/stages/${stage}/reject`),
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    },
+  )
+  return parseJson(res)
+}
+
+export async function startRunVisuals(
+  projectId: string,
+  runId: string,
+): Promise<ProjectRun> {
+  const res = await fetch(
+    apiUrl(`/api/v1/projects/${projectId}/runs/${runId}/visuals/start`),
+    { method: 'POST' },
+  )
+  return parseJson(res)
+}
+
+export async function skipRunVisuals(
+  projectId: string,
+  runId: string,
+): Promise<ProjectRun> {
+  const res = await fetch(
+    apiUrl(`/api/v1/projects/${projectId}/runs/${runId}/visuals/skip`),
+    { method: 'POST' },
+  )
+  return parseJson(res)
+}
+
+export async function getVisualEpisode(seriesId: string): Promise<VisualEpisodeStatus> {
+  const res = await fetch(apiUrl(`/api/v1/visuals/${encodeURIComponent(seriesId)}`))
   return parseJson(res)
 }
 
