@@ -1,4 +1,20 @@
 services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: kissa
+      POSTGRES_PASSWORD: kissa
+      POSTGRES_DB: kissa
+    ports:
+      - "5432:5432"
+    volumes:
+      - kissa_pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kissa -d kissa"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
   redis:
     image: redis:7-alpine
     healthcheck:
@@ -17,13 +33,16 @@ services:
     env_file:
       - .env
     environment:
-      DATABASE_URL: ${DATABASE_URL}
-      REDIS_URL: ${REDIS_URL}
+      # Prefer Lakebase from .env; fall back to local compose Postgres.
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://kissa:kissa@postgres:5432/kissa}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
       DATA_DIR: ${DATA_DIR:-/data}
     volumes:
       - kissa_data:/data
     depends_on:
       redis:
+        condition: service_healthy
+      postgres:
         condition: service_healthy
     ports:
       - "8000:8000"
@@ -42,13 +61,15 @@ services:
     env_file:
       - .env
     environment:
-      DATABASE_URL: ${DATABASE_URL}
-      REDIS_URL: ${REDIS_URL}
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://kissa:kissa@postgres:5432/kissa}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
       DATA_DIR: ${DATA_DIR:-/data}
     volumes:
       - kissa_data:/data
     depends_on:
       redis:
+        condition: service_healthy
+      postgres:
         condition: service_healthy
       api:
         condition: service_healthy
@@ -67,3 +88,4 @@ services:
 
 volumes:
   kissa_data:
+  kissa_pg:
