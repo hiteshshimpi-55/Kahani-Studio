@@ -9,6 +9,8 @@ RUN apt-get update \
 COPY pyproject.toml ./
 COPY app ./app
 COPY worker ./worker
+COPY routes ./routes
+COPY contentExtraction ./contentExtraction
 
 RUN pip install --no-cache-dir .
 

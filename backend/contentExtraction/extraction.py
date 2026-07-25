@@ -3,99 +3,108 @@ Content extraction for video and audio generation pipelines.
 
 Takes a user prompt and extracts structured keywords/context
 that downstream generators can consume.
+
+Uses OpenAI with structured outputs (beta.chat.completions.parse).
 """
 
-import os
-from typing import Optional
-from pydantic import BaseModel, Field
-import anthropic
+import logging
 
+from openai import OpenAI
 
-class VideoContext(BaseModel):
-    scenes: list[str] = Field(description="Visual scenes or settings to depict")
-    objects: list[str] = Field(description="Key objects or props")
-    colors: list[str] = Field(description="Dominant color palette or mood colors")
-    style: str = Field(description="Cinematic/visual style (e.g. cinematic, animated, documentary)")
-    lighting: str = Field(description="Lighting mood (e.g. golden hour, dark, neon)")
-    camera_motion: list[str] = Field(description="Suggested camera movements (e.g. slow pan, close-up)")
+from app.core.config import settings
 
-
-class AudioContext(BaseModel):
-    genre: str = Field(description="Music genre (e.g. orchestral, electronic, acoustic)")
-    tempo: str = Field(description="Tempo/pace (e.g. slow, moderate, fast, 120 BPM)")
-    instruments: list[str] = Field(description="Suggested instruments or sound elements")
-    mood: str = Field(description="Emotional tone for the audio")
-    sound_effects: list[str] = Field(description="Non-music sound effects to include")
-
-
-class ExtractionResult(BaseModel):
-    theme: str = Field(description="Core theme or subject of the content")
-    narrative: str = Field(description="Brief one-sentence narrative description")
-    emotional_tone: str = Field(description="Primary emotional tone (e.g. melancholic, triumphant, mysterious)")
-    setting: str = Field(description="Time and place of the content")
-    characters: list[str] = Field(description="Characters or entities present")
-    action_keywords: list[str] = Field(description="Key actions or events happening")
-    keywords: list[str] = Field(description="Top keywords capturing the full context")
-    video: VideoContext
-    audio: AudioContext
-    content_warnings: list[str] = Field(
-        default_factory=list,
-        description="Any sensitive themes the generators should be aware of",
-    )
+log = logging.getLogger(__name__)
+from app.schemas.extraction.response import ExtractionResponse
 
 
 SYSTEM_PROMPT = """\
-You are an expert content analyst for a multimedia generation platform. \
-Given a user's creative prompt, extract rich, structured context that video and audio generation \
+You are an expert content analyst for a multimedia generation platform.
+Given a user's creative prompt, extract rich, structured context that video and audio generation
 models can use to create cohesive content.
 
-Be specific and actionable. Prefer concrete descriptors over vague ones.
+Rules:
+- Always extract topic, theme, narrative, emotional_tone, setting, keywords, action_keywords, video, and audio.
+- Extract characters only if the prompt explicitly mentions or implies named/described people, creatures, or entities.
+  If there are no characters, return an empty list.
+- For each character, infer backstory and motivation if enough context exists; otherwise leave backstory null.
+- Extract relationships between characters if two or more characters exist. Describe the nature and dynamic of each pair.
+- Extract plot only if the prompt describes a sequence of events or a story arc.
+  If it is a mood piece or abstract prompt with no narrative, return null for plot.
+- Be specific and actionable. Prefer concrete descriptors over vague ones.
 """
 
 
-def extract_content(user_prompt: str, api_key: Optional[str] = None) -> ExtractionResult:
+def _get_client() -> OpenAI:
+    return OpenAI(api_key=settings.openai_api_key)
+
+
+def extract_content(user_prompt: str) -> ExtractionResponse:
     """
     Extract structured video and audio context from a user prompt.
 
     Args:
         user_prompt: The raw creative prompt from the user.
-        api_key: Anthropic API key. Falls back to ANTHROPIC_API_KEY env var.
 
     Returns:
-        ExtractionResult with video keywords, audio keywords, and overall context.
+        ExtractionResponse with topic, characters, plot, video/audio keywords, and overall context.
     """
-    client = anthropic.Anthropic(api_key=api_key) if api_key else anthropic.Anthropic()
+    client = _get_client()
+    log.info("openai_extract_start model=%r", settings.openai_model)
 
-    response = client.messages.parse(
-        model="claude-opus-5",
-        max_tokens=2048,
-        system=SYSTEM_PROMPT,
+    completion = client.beta.chat.completions.parse(
+        model=settings.openai_model,
         messages=[
+            {"role": "system", "content": SYSTEM_PROMPT},
             {
                 "role": "user",
                 "content": (
-                    f"Extract content from this prompt for video and audio generation:\n\n"
+                    "Extract content from this prompt for video and audio generation:\n\n"
                     f"{user_prompt}"
                 ),
-            }
+            },
         ],
-        output_format=ExtractionResult,
+        response_format=ExtractionResponse,
     )
 
-    return response.parsed_output
+    parsed = completion.choices[0].message.parsed
+    log.info(
+        "openai_extract_done topic=%r finish_reason=%r",
+        parsed.topic,
+        completion.choices[0].finish_reason,
+    )
+    return parsed
 
 
-def format_extraction(result: ExtractionResult) -> str:
+def format_extraction(result: ExtractionResponse) -> str:
     """Return a human-readable summary of the extraction result."""
     lines = [
+        f"Topic:          {result.topic}",
         f"Theme:          {result.theme}",
         f"Narrative:      {result.narrative}",
         f"Emotional Tone: {result.emotional_tone}",
         f"Setting:        {result.setting}",
         "",
         "Keywords:       " + ", ".join(result.keywords),
-        "Characters:     " + (", ".join(result.characters) if result.characters else "none"),
         "Actions:        " + ", ".join(result.action_keywords),
+    ]
+
+    if result.characters:
+        lines += ["", "--- CHARACTERS ---"]
+        for c in result.characters:
+            lines.append(f"  {c.name} ({c.role}): {c.description}")
+            if c.traits:
+                lines.append(f"    Traits: {', '.join(c.traits)}")
+
+    if result.plot:
+        lines += ["", "--- PLOT ---", f"  {result.plot.summary}"]
+        if result.plot.conflict:
+            lines.append(f"  Conflict: {result.plot.conflict}")
+        if result.plot.resolution:
+            lines.append(f"  Resolution: {result.plot.resolution}")
+        for pt in result.plot.points:
+            lines.append(f"  {pt.order}. {pt.description}")
+
+    lines += [
         "",
         "--- VIDEO ---",
         f"Style:          {result.video.style}",
