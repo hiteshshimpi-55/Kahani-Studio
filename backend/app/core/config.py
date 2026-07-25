@@ -37,8 +37,11 @@ class Settings(BaseSettings):
     redis_url: str = "redis://redis:6379/0"
     data_dir: str = "/data"
 
-    # ElevenLabs (TTS). Never commit real keys.
-    elevenlabs_api_key: str | None = None
+    # ElevenLabs (TTS / SFX / timeline). Never commit real keys.
+    elevenlabs_api_key: str = Field(
+        default="",
+        validation_alias=AliasChoices("ELEVENLABS_API_KEY"),
+    )
     elevenlabs_default_model_id: str = "eleven_v3"
     elevenlabs_default_output_format: str = "mp3_44100_128"
     elevenlabs_default_voice_id: str = "JBFqnCBsd6RMkjVDRZzb"  # George (library)
@@ -47,27 +50,29 @@ class Settings(BaseSettings):
     sarvam_api_key: str | None = None
     sarvam_default_speaker: str = "shubh"
 
-    # Default TTS / cast provider: "sarvam" | "elevenlabs"
-    # Per-request override via CastScript.voice_provider / audiobook preview body.
+    # Default TTS / cast provider: "elevenlabs" | "sarvam"
     tts_provider: str = "elevenlabs"
 
-    # Replicate (identity sheets + scene stills). Never commit real tokens.
-    replicate_api_token: str | None = None
-    replicate_face_model: str = "black-forest-labs/flux-schnell"
-    # Pin version — owner/name alone can 404 on predictions.create for some accounts.
-    replicate_pulid_model: str = (
-        "bytedance/flux-pulid:8baa7ef2255075b46f4d91cd238c21d31181b3e6a864463f967960bb0112525b"
-    )
-    replicate_default_width: int = 576
-    replicate_default_height: int = 1024
+    # Gemini — visual director (text) + Nano Banana image generation.
+    gemini_api_key: str | None = None
+    gemini_text_model: str = "gemini-2.5-flash"
+    gemini_image_model: str = "gemini-3.1-flash-image"
+    gemini_image_fallback_model: str = "gemini-2.5-flash-image"
+    # Image provider for lookbook + scene stills: "openai" | "gemini"
+    image_provider: str = "openai"
+    openai_image_model: str = "gpt-image-1"
+    openai_image_fallback_model: str = "gpt-image-1-mini"
+    openai_image_quality: str = "medium"  # low | medium | high
+    # Vertical mobile canvas (Pocket FM / Kuku TV style)
+    visual_video_width: int = 1080
+    visual_video_height: int = 1920
+    visual_video_fps: int = 30
 
     # Databricks workspace + AI Search / Vector Search.
     databricks_host: str | None = None
     databricks_token: str | None = None
-    # Team project-context Direct Access index
     databricks_ai_search_endpoint: str | None = None
     databricks_ai_search_index: str | None = None
-    # Cast / SFX / shot-template Delta Sync index
     databricks_vector_search_endpoint: str | None = None
     databricks_vector_search_index: str | None = None
     databricks_vector_search_columns: str = (
@@ -80,13 +85,7 @@ class Settings(BaseSettings):
     databricks_embedding_endpoint: str = "databricks-qwen3-embedding-0-6b"
     databricks_sql_warehouse_id: str | None = None
 
-    # Script Writer LLM (falls back to stub screenplay if LLM_API_KEY unset)
-    llm_provider: str = "openai"
-    llm_api_key: str = ""
-    llm_model: str = "gpt-4o"
-
-    # Legacy aliases used by some team snippets
-    # LLM (Script Writer + chat orchestrator)
+    # Script Writer LLM + chat orchestrator
     llm_provider: str = "openai"
     llm_api_key: str = Field(
         default="",
@@ -101,6 +100,9 @@ class Settings(BaseSettings):
 
     allowed_origins: list[str] = ["*"]
 
+    @property
+    def databricks_cast_table_fqn(self) -> str:
+        return f"{self.databricks_catalog}.{self.databricks_schema}.{self.databricks_cast_table}"
 
     @property
     def databricks_cast_index_fqn(self) -> str:
@@ -108,18 +110,10 @@ class Settings(BaseSettings):
         if configured:
             return configured
         return f"{self.databricks_catalog}.{self.databricks_schema}.{self.databricks_cast_table}_index"
-    # Databricks AI Search (optional — local chunk fallback if unset)
-    databricks_host: str = ""
-    databricks_token: str = ""
-    databricks_ai_search_endpoint: str = ""
-    databricks_ai_search_index: str = ""
-    databricks_embedding_endpoint: str = ""
 
-    # ElevenLabs TTS (timeline dialogue). Without key, API returns stub tones.
-    elevenlabs_api_key: str = Field(
-        default="",
-        validation_alias=AliasChoices("ELEVENLABS_API_KEY"),
-    )
+    @property
+    def effective_llm_api_key(self) -> str:
+        return (self.llm_api_key or self.openai_api_key or "").strip()
 
     @field_validator("database_url", mode="before")
     @classmethod
@@ -128,13 +122,8 @@ class Settings(BaseSettings):
             return normalize_database_url(value)
         return value
 
-    @property
-    def effective_llm_api_key(self) -> str:
-        return (self.llm_api_key or self.openai_api_key or "").strip()
 
 settings = Settings()
 # Allow OPENAI_API_KEY to stand in for LLM_API_KEY when only one is set.
 if not (settings.llm_api_key or "").strip() and (settings.openai_api_key or "").strip():
     settings.llm_api_key = settings.openai_api_key
-
-settings = Settings()
