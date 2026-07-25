@@ -1,5 +1,6 @@
 import { ArrowUp, Square } from 'lucide-react'
-import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react'
+import { useCallback, useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
+import { Link } from 'react-router-dom'
 
 import { AddAssetMenu } from '@/components/AddAssetMenu'
 import { cn } from '@/lib/utils'
@@ -13,6 +14,8 @@ type Props = {
   disabled?: boolean
   variant?: 'default' | 'hero'
   placeholder?: string
+  contextChip?: ReactNode
+  contextHref?: string
 }
 
 export function ChatComposer({
@@ -24,6 +27,8 @@ export function ChatComposer({
   disabled = false,
   variant = 'default',
   placeholder = 'Ask anything, or describe the story you want…',
+  contextChip,
+  contextHref,
 }: Props) {
   const [value, setValue] = useState('')
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -65,6 +70,16 @@ export function ChatComposer({
           : 'rounded-[22px] border border-[var(--folio-border-strong)] bg-[var(--surface-2)] p-2.5 shadow-[0_12px_36px_rgba(28,25,23,0.06)] dark:shadow-[0_12px_36px_rgba(0,0,0,0.35)]',
       )}
     >
+      {contextChip && contextHref ? (
+        <div className="mb-1 px-2">
+          <Link
+            to={contextHref}
+            className="inline-flex items-center rounded-full bg-[var(--surface-1)] px-2.5 py-1 text-[11px] font-medium text-[var(--text-secondary)] transition-colors hover:bg-[var(--surface-0)] hover:text-[var(--brand)]"
+          >
+            {contextChip}
+          </Link>
+        </div>
+      ) : null}
       <textarea
         ref={textareaRef}
         value={value}

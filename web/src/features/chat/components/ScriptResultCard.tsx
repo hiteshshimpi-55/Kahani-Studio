@@ -6,22 +6,37 @@ import { apiUrl } from '@/lib/api-client'
 import * as projectsApi from '@/features/projects/api/projects-api'
 import type { ScriptAudioStatus } from '@/features/projects/api/projects-api'
 
+type CastMember = {
+  id?: string
+  name?: string
+  role?: string
+  voice?: string
+}
+
 export function ScriptResultCard({
   projectId,
   scriptId,
   runId,
   preview,
+  package: scriptPackage,
   isDraft,
   onSaveDraft,
   onUpdateDraft,
+  onContinue,
 }: {
   projectId: string
   scriptId?: string
   runId?: string
   preview: string
+  package?: {
+    title?: string
+    bible?: { characters?: CastMember[] }
+    parts?: Array<{ part_number?: number; title?: string; cliff_out?: string }>
+  } | null
   isDraft?: boolean
   onSaveDraft?: (text?: string) => void | Promise<{ id: string } | void>
   onUpdateDraft?: (text: string) => void | Promise<void>
+  onContinue?: () => void
 }) {
   const [editing, setEditing] = useState(false)
   const [draftText, setDraftText] = useState(preview)
@@ -139,11 +154,18 @@ export function ScriptResultCard({
   const audioInFlight =
     audioBusy || audioStatus?.status === 'queued' || audioStatus?.status === 'running'
 
+  const cast = scriptPackage?.bible?.characters ?? []
+  const part = scriptPackage?.parts?.[0]
+  const partLabel =
+    part?.part_number != null
+      ? `Episode ${part.part_number}${part.title ? `: ${part.title}` : ''}`
+      : scriptPackage?.title
+
   return (
     <article className="chat-tool-enter my-3 overflow-hidden rounded-[16px] border border-[var(--folio-border-strong)] bg-[var(--surface-2)] shadow-[var(--shadow-card)]">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--folio-border)] px-4 py-3">
         <p className="text-[11px] font-semibold tracking-[0.14em] text-[var(--text-muted)] uppercase">
-          {isDraft || localScriptId ? 'Saved draft' : 'Script output'}
+          {partLabel || (isDraft || localScriptId ? 'Saved draft' : 'Episode output')}
         </p>
         <div className="flex flex-wrap items-center gap-3">
           {!isDraft && !localScriptId && runId && onSaveDraft ? (
@@ -220,6 +242,35 @@ export function ScriptResultCard({
         </div>
       </div>
 
+      {cast.length > 0 ? (
+        <div className="border-b border-[var(--folio-border)] px-4 py-3">
+          <p className="mb-2 text-[11px] font-semibold tracking-[0.12em] text-[var(--text-muted)] uppercase">
+            Cast
+          </p>
+          <ul className="flex flex-wrap gap-2">
+            {cast.map((ch, i) => (
+              <li
+                key={ch.id || ch.name || i}
+                className="max-w-full rounded-[8px] bg-[var(--surface-1)] px-2.5 py-1.5"
+                title={ch.voice || undefined}
+              >
+                <span className="text-[12px] font-medium text-[var(--text-primary)]">
+                  {ch.name || ch.id || 'Character'}
+                </span>
+                {ch.role ? (
+                  <span className="ml-1.5 text-[11px] text-[var(--text-secondary)]">{ch.role}</span>
+                ) : null}
+                {ch.voice ? (
+                  <span className="mt-0.5 block text-[11px] text-[var(--text-secondary)] line-clamp-1">
+                    {ch.voice}
+                  </span>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
       {editing ? (
         <div className="px-4 py-4">
           <textarea
@@ -260,6 +311,21 @@ export function ScriptResultCard({
           {preview}
         </pre>
       )}
+
+      {onContinue ? (
+        <div className="border-t border-[var(--folio-border)] px-4 py-3">
+          <button
+            type="button"
+            className="text-[13px] font-medium text-[var(--brand)] hover:underline"
+            onClick={onContinue}
+          >
+            Continue to next episode
+          </button>
+          {part?.cliff_out ? (
+            <p className="mt-1 text-[12px] text-[var(--text-secondary)]">Cliff: {part.cliff_out}</p>
+          ) : null}
+        </div>
+      ) : null}
 
       {(audioInFlight || audioSrc || audioError) && (
         <div className="border-t border-[var(--folio-border)] px-4 py-3">

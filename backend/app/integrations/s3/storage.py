@@ -36,6 +36,12 @@ class ArtifactStorage:
 
     def put_bytes(self, key: str, data: bytes, content_type: str = "application/octet-stream") -> str:
         """Store bytes; returns the storage key (same as input)."""
+        # Legacy absolute filesystem paths (pre object-key rows)
+        if key.startswith("/") or (len(key) > 2 and key[1] == ":"):
+            path = Path(key)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(data)
+            return key
         if self.uses_s3:
             assert self._client is not None and self.bucket is not None
             self._client.put_object(
@@ -48,13 +54,28 @@ class ArtifactStorage:
         self._local_path(key).write_bytes(data)
         return key
 
+    def put_text(
+        self,
+        key: str,
+        text: str,
+        *,
+        encoding: str = "utf-8",
+        content_type: str = "text/plain; charset=utf-8",
+    ) -> str:
+        return self.put_bytes(key, text.encode(encoding), content_type=content_type)
+
     def get_bytes(self, key: str) -> bytes:
         legacy = self._maybe_legacy_path(key)
         if legacy is not None:
             return legacy.read_bytes()
         if self.uses_s3:
             assert self._client is not None and self.bucket is not None
-            resp = self._client.get_object(Bucket=self.bucket, Key=key)
+            try:
+                resp = self._client.get_object(Bucket=self.bucket, Key=key)
+            except Exception as exc:
+                if _is_not_found(exc):
+                    raise FileNotFoundError(key) from exc
+                raise
             return resp["Body"].read()
         path = self._local_path(key)
         if not path.exists():
@@ -63,6 +84,35 @@ class ArtifactStorage:
 
     def get_text(self, key: str, encoding: str = "utf-8", errors: str = "ignore") -> str:
         return self.get_bytes(key).decode(encoding, errors=errors)
+
+    def exists(self, key: str) -> bool:
+        legacy = self._maybe_legacy_path(key)
+        if legacy is not None:
+            return True
+        if self.uses_s3:
+            assert self._client is not None and self.bucket is not None
+            try:
+                self._client.head_object(Bucket=self.bucket, Key=key)
+                return True
+            except Exception as exc:
+                if _is_not_found(exc):
+                    return False
+                raise
+        return self._local_path(key).is_file()
+
+    def ensure_local(self, key: str) -> Path:
+        """Return a local filesystem path for key, downloading from S3 when needed."""
+        legacy = self._maybe_legacy_path(key)
+        if legacy is not None:
+            return legacy
+        local = self._local_path(key)
+        if self.uses_s3:
+            if not local.is_file():
+                local.write_bytes(self.get_bytes(key))
+            return local
+        if not local.is_file():
+            raise FileNotFoundError(key)
+        return local
 
     def delete(self, key: str) -> None:
         legacy = self._maybe_legacy_path(key)
@@ -93,6 +143,21 @@ class ArtifactStorage:
             if path.is_file():
                 return path
         return None
+
+
+def _is_not_found(exc: BaseException) -> bool:
+    code = getattr(exc, "response", None)
+    if isinstance(code, dict):
+        err = code.get("Error") or {}
+        if err.get("Code") in {"404", "NoSuchKey", "NotFound", "404 Not Found"}:
+            return True
+    status = getattr(exc, "response", None)
+    if isinstance(status, dict):
+        meta = status.get("ResponseMetadata") or {}
+        if meta.get("HTTPStatusCode") == 404:
+            return True
+    name = type(exc).__name__
+    return name in {"NoSuchKey", "404", "NotFound"}
 
 
 @lru_cache(maxsize=1)

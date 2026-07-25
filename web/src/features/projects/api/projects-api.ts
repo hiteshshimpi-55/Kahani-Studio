@@ -5,10 +5,12 @@ import type {
   CreateProjectInput,
   Project,
   ProjectAttachment,
+  ProjectCharacter,
   ProjectRun,
   ScriptLatest,
   ScriptSummary,
   StartRunInput,
+  StoryContextSummary,
 } from '../types'
 
 export async function listProjects(): Promise<Project[]> {
@@ -129,6 +131,7 @@ export async function listChatMessages(
     questions?: string[]
     plot_pitches?: Array<{ title: string; logline: string; tone: string }>
     script_preview?: string | null
+    script_package?: Record<string, unknown> | null
     draft_script_id?: string | null
     is_draft?: boolean
     run_status?: string | null
@@ -180,6 +183,59 @@ export async function getLatestScript(projectId: string): Promise<ScriptLatest> 
 
 export async function listScripts(projectId: string): Promise<ScriptSummary[]> {
   const res = await fetch(apiUrl(`/api/v1/projects/${projectId}/scripts`))
+  return parseJson(res)
+}
+
+export async function pinScript(
+  projectId: string,
+  scriptId: string,
+  pinned: boolean,
+): Promise<ScriptSummary> {
+  const res = await fetch(apiUrl(`/api/v1/projects/${projectId}/scripts/${scriptId}/pin`), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ pinned }),
+  })
+  return parseJson(res)
+}
+
+export async function listCharacters(projectId: string): Promise<ProjectCharacter[]> {
+  const res = await fetch(apiUrl(`/api/v1/projects/${projectId}/characters`))
+  return parseJson(res)
+}
+
+export async function updateCharacter(
+  projectId: string,
+  characterId: string,
+  body: Partial<
+    Pick<ProjectCharacter, 'name' | 'role' | 'voice' | 'speech_patterns' | 'arc'>
+  >,
+): Promise<ProjectCharacter> {
+  const res = await fetch(apiUrl(`/api/v1/projects/${projectId}/characters/${characterId}`), {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  return parseJson(res)
+}
+
+export async function deleteCharacter(
+  projectId: string,
+  characterId: string,
+): Promise<void> {
+  const res = await fetch(
+    apiUrl(`/api/v1/projects/${projectId}/characters/${characterId}`),
+    { method: 'DELETE' },
+  )
+  if (!res.ok && res.status !== 204) {
+    await parseJson(res)
+  }
+}
+
+export async function getStoryContextSummary(
+  projectId: string,
+): Promise<StoryContextSummary> {
+  const res = await fetch(apiUrl(`/api/v1/projects/${projectId}/story-context`))
   return parseJson(res)
 }
 

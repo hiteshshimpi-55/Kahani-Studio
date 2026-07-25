@@ -32,6 +32,21 @@ async def _ensure_schema() -> None:
                 "ADD COLUMN IF NOT EXISTS session_id VARCHAR(36)"
             )
         )
+        await conn.execute(
+            text("ALTER TABLE scripts ADD COLUMN IF NOT EXISTS part_number INTEGER")
+        )
+        await conn.execute(
+            text(
+                "ALTER TABLE scripts "
+                "ADD COLUMN IF NOT EXISTS pinned BOOLEAN NOT NULL DEFAULT FALSE"
+            )
+        )
+        await conn.execute(
+            text(
+                "ALTER TABLE project_runs "
+                "ADD COLUMN IF NOT EXISTS part_number INTEGER"
+            )
+        )
 
 
 @asynccontextmanager

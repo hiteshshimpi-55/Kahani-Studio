@@ -32,10 +32,59 @@ export interface ProjectRun {
   created_at: string
   updated_at: string
   session_id?: string | null
+  part_count?: number | null
+  total_duration_sec?: number | null
   screenplay_preview?: string | null
   screenplay_md?: string | null
+  package?: ScriptPackage | null
   draft_script_id?: string | null
   is_draft?: boolean
+}
+
+export interface BibleCharacter {
+  id?: string
+  name?: string
+  role?: string
+  voice?: string
+  speech_patterns?: string
+  arc?: string
+}
+
+export interface ScriptPackage {
+  title?: string
+  language?: string
+  narration_config?: Record<string, unknown>
+  bible?: { characters?: BibleCharacter[] }
+  parts?: Array<{
+    part_number?: number
+    title?: string
+    target_duration_sec?: number
+    screenplay?: string
+    cliff_out?: string
+    sfx_cues?: string[]
+  }>
+  total_duration_sec?: number
+  [key: string]: unknown
+}
+
+export interface ProjectCharacter {
+  id: string
+  project_id: string
+  character_key: string
+  name: string
+  role: string | null
+  voice: string | null
+  speech_patterns: string | null
+  arc: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface StoryContextSummary {
+  cast_count: number
+  docs_count: number
+  episode_count: number
+  latest_part_number: number | null
 }
 
 export interface ChatSession {
@@ -52,9 +101,13 @@ export interface ScriptLatest {
   project_id: string
   run_id: string
   version: number
-  package: Record<string, unknown>
+  package: ScriptPackage
   screenplay_md: string
   created_at: string
+  part_number?: number | null
+  pinned?: boolean
+  cliff_out?: string | null
+  title?: string | null
 }
 
 export interface ScriptSummary {
@@ -65,6 +118,10 @@ export interface ScriptSummary {
   title: string | null
   prompt_snippet: string | null
   created_at: string
+  part_number?: number | null
+  pinned?: boolean
+  cliff_out?: string | null
+  is_latest_continuity?: boolean
 }
 
 export interface CreateProjectInput {
@@ -78,4 +135,5 @@ export interface StartRunInput {
   narration_config?: Record<string, unknown>
   part_count?: number
   total_duration_sec?: number
+  part_number?: number
 }

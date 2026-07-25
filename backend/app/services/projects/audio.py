@@ -4,13 +4,13 @@ from __future__ import annotations
 
 import json
 import logging
-import shutil
 from copy import deepcopy
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from app.core.config import settings
+from app.integrations.s3 import get_artifact_storage
 from app.services.audiobook.service import AudiobookService
 
 log = logging.getLogger(__name__)
@@ -19,35 +19,57 @@ AUDIO_STATUS_FILE = "audio_status.json"
 AUDIO_FILE = "episode.mp3"
 
 
+def _is_absolute_fs_path(storage_dir: str | Path) -> bool:
+    text = str(storage_dir)
+    return text.startswith("/") or (len(text) > 2 and text[1] == ":")
+
+
+def audio_status_key(storage_dir: str | Path) -> str:
+    if _is_absolute_fs_path(storage_dir):
+        return str(Path(storage_dir) / AUDIO_STATUS_FILE)
+    return f"{str(storage_dir).rstrip('/')}/{AUDIO_STATUS_FILE}"
+
+
+def audio_file_key(storage_dir: str | Path) -> str:
+    if _is_absolute_fs_path(storage_dir):
+        return str(Path(storage_dir) / AUDIO_FILE)
+    return f"{str(storage_dir).rstrip('/')}/{AUDIO_FILE}"
+
+
 def audio_status_path(storage_dir: str | Path) -> Path:
+    """Legacy helper — prefer audio_status_key + ArtifactStorage."""
     return Path(storage_dir) / AUDIO_STATUS_FILE
 
 
 def audio_file_path(storage_dir: str | Path) -> Path:
-    return Path(storage_dir) / AUDIO_FILE
+    """Return a local path for the episode MP3 (downloads from S3 when needed)."""
+    key = audio_file_key(storage_dir)
+    return get_artifact_storage().ensure_local(key)
 
 
 def read_audio_status(storage_dir: str | Path) -> dict[str, Any] | None:
-    path = audio_status_path(storage_dir)
-    if not path.is_file():
+    key = audio_status_key(storage_dir)
+    try:
+        raw = get_artifact_storage().get_text(key)
+    except FileNotFoundError:
         return None
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
+        data = json.loads(raw)
         return data if isinstance(data, dict) else None
     except Exception:
         return None
 
 
 def write_audio_status(storage_dir: str | Path, payload: dict[str, Any]) -> dict[str, Any]:
-    out_dir = Path(storage_dir)
-    out_dir.mkdir(parents=True, exist_ok=True)
     body = {
         **payload,
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
-    audio_status_path(out_dir).write_text(
+    key = audio_status_key(storage_dir)
+    get_artifact_storage().put_text(
+        key,
         json.dumps(body, ensure_ascii=False, indent=2),
-        encoding="utf-8",
+        content_type="application/json",
     )
     return body
 
@@ -119,15 +141,25 @@ def render_script_audio(
         if not preview or not Path(preview).is_file():
             raise RuntimeError("Audiobook render produced no MP3")
 
-        dest = audio_file_path(storage_dir)
-        shutil.copy2(preview, dest)
+        audio_key = audio_file_key(storage_dir)
+        get_artifact_storage().put_bytes(
+            audio_key,
+            Path(preview).read_bytes(),
+            content_type="audio/mpeg",
+        )
+        # Materialize locally so FileResponse can serve immediately on this host
+        try:
+            get_artifact_storage().ensure_local(audio_key)
+        except FileNotFoundError:
+            pass
+
         audio_url = f"/api/v1/projects/{project_id}/scripts/{script_id}/audio/file"
         status = write_audio_status(
             storage_dir,
             {
                 "status": "succeeded",
                 "error": None,
-                "audio_path": str(dest),
+                "audio_path": audio_key,
                 "audio_url": audio_url,
                 "voice_provider": result.get("voice_provider") or provider,
                 "line_count": result.get("line_count"),

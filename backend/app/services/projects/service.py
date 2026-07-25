@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import logging
 from datetime import datetime, timezone
 from pathlib import Path
@@ -13,9 +12,16 @@ from app.agents.chat_memory import append_turn, load_checkpoint_messages, messag
 from app.agents.graph.checkpointer import get_checkpointer
 from app.core.config import settings
 from app.errors import AppError
-from app.repository.models.project import ChatSession, ProjectAttachment, ProjectRun, Script
+from app.repository.models.project import (
+    ChatSession,
+    ProjectAttachment,
+    ProjectCharacter,
+    ProjectRun,
+    Script,
+)
 from app.repository.projects import (
     AttachmentRepository,
+    CharacterRepository,
     ChatSessionRepository,
     ProjectRepository,
     RunRepository,
@@ -23,14 +29,18 @@ from app.repository.projects import (
 )
 from app.schemas.projects.request import (
     ChatMessageRequest,
+    CreateCharacterRequest,
     CreateProjectRequest,
     GenerateScriptAudioRequest,
+    PinScriptRequest,
     SaveDraftRequest,
     StartRunRequest,
+    UpdateCharacterRequest,
     UpdateScriptRequest,
 )
 from app.schemas.projects.response import (
     AttachmentResponse,
+    CharacterResponse,
     ChatHistoryItem,
     ChatMessageResponse,
     ChatSessionResponse,
@@ -40,6 +50,13 @@ from app.schemas.projects.response import (
     ScriptDetailResponse,
     ScriptLatestResponse,
     ScriptSummaryResponse,
+    StoryContextSummaryResponse,
+)
+from app.services.projects.continuity import (
+    bible_characters,
+    package_cliff,
+    package_part_number,
+    package_title,
 )
 from app.services.chat.checkpoint_history import build_session_chat_history
 from app.services.chat.orchestrator import analyze_user_message
@@ -55,8 +72,11 @@ from app.services.projects.storage import (
     is_allowed_filename,
     read_run_package,
     read_run_screenplay,
-    run_screenplay_path,
-    runs_dir,
+    read_screenplay_artifact,
+    run_object_prefix,
+    write_run_screenplay,
+    write_versioned_package,
+    write_versioned_screenplay,
 )
 logger = logging.getLogger(__name__)
 
@@ -65,8 +85,10 @@ DEFAULT_NARRATION = {
     "cast_model": "multicast",
     "platform_style": "pocket_fm_serial",
     "soundscape": True,
-    "narrators": [{"id": "NARRATOR", "voice_notes": "calm thriller guide"}],
+    "narrators": [{"id": "NARRATOR", "voice_notes": "intense thriller narrator, measured suspense"}],
 }
+
+DEFAULT_EPISODE_DURATION_SEC = 90
 
 
 class ProjectsService:
@@ -78,6 +100,7 @@ class ProjectsService:
         self._sessions = ChatSessionRepository(session)
         self._runs = RunRepository(session)
         self._scripts = ScriptRepository(session)
+        self._characters = CharacterRepository(session)
 
     async def create_project(self, body: CreateProjectRequest) -> ProjectResponse:
         row = await self._projects.create(name=body.name.strip(), description=body.description)
@@ -235,14 +258,22 @@ class ProjectsService:
         else:
             session = await self._ensure_default_session(project_id)
 
+        duration = body.total_duration_sec or DEFAULT_EPISODE_DURATION_SEC
+        duration = max(30, min(180, int(duration)))
+        if body.part_number and body.part_number >= 1:
+            part_number = int(body.part_number)
+        else:
+            part_number = (await self._scripts.max_part_number(project_id)) + 1
+
         run = ProjectRun(
             project_id=project_id,
             session_id=session.id,
             prompt=body.prompt.strip(),
             status="queued",
             narration_config=narration,
-            part_count=body.part_count or 4,
-            total_duration_sec=body.total_duration_sec or 600,
+            part_count=1,
+            total_duration_sec=duration,
+            part_number=part_number,
         )
         run = await self._runs.create(run)
         # LangGraph thread id = run id (checkpoints keyed per generation run)
@@ -325,27 +356,30 @@ class ProjectsService:
             )
 
         # Keep working copy in sync with what the user is saving
-        run_screenplay_path(project_id, run_id).write_text(screenplay, encoding="utf-8")
+        write_run_screenplay(project_id, run_id, screenplay)
 
-        out_dir = runs_dir(project_id, run_id)
         version = await self._scripts.next_version(project_id)
-        screenplay_path = out_dir / f"screenplay.v{version}.md"
-        package_path = out_dir / f"script.v{version}.json"
-        screenplay_path.write_text(screenplay, encoding="utf-8")
-        package_path.write_text(
-            json.dumps(package, ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
+        screenplay_key = write_versioned_screenplay(project_id, run_id, version, screenplay)
+        write_versioned_package(project_id, run_id, version, package)
+        storage_prefix = run_object_prefix(project_id, run_id)
 
+        part_number = (
+            package_part_number(package)
+            or run.part_number
+            or (await self._scripts.max_part_number(project_id)) + 1
+        )
         script = Script(
             project_id=project_id,
             run_id=run_id,
             version=version,
             package_json=package,
-            screenplay_path=str(screenplay_path),
-            storage_dir=str(out_dir),
+            screenplay_path=screenplay_key,
+            storage_dir=storage_prefix,
+            part_number=part_number,
+            pinned=False,
         )
         script = await self._scripts.create(script)
+        await self._characters.upsert_from_bible(project_id, bible_characters(package))
         return ScriptDetailResponse(**(await self._script_detail(script)).model_dump())
 
     async def update_script(
@@ -356,13 +390,13 @@ class ProjectsService:
         if not script or script.project_id != project_id:
             raise AppError(code="NOT_FOUND", message="Script not found", http_status_code=404)
 
-        path = Path(script.screenplay_path)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(body.screenplay_md, encoding="utf-8")
-
+        get_artifact_storage().put_text(
+            script.screenplay_path,
+            body.screenplay_md,
+            content_type="text/markdown; charset=utf-8",
+        )
         # Keep run working copy in sync when present
-        run_copy = run_screenplay_path(project_id, script.run_id)
-        run_copy.write_text(body.screenplay_md, encoding="utf-8")
+        write_run_screenplay(project_id, script.run_id, body.screenplay_md)
 
         return ScriptDetailResponse(**(await self._script_detail(script)).model_dump())
 
@@ -464,7 +498,9 @@ class ProjectsService:
         raw = read_audio_status(script.storage_dir)
         # Heal URL if file exists but status missing url
         if raw and raw.get("status") == "succeeded" and not raw.get("audio_url"):
-            if audio_file_path(script.storage_dir).is_file():
+            from app.services.projects.audio import audio_file_key
+
+            if get_artifact_storage().exists(audio_file_key(script.storage_dir)):
                 raw = write_audio_status(
                     script.storage_dir,
                     {
@@ -479,7 +515,10 @@ class ProjectsService:
         script = await self._scripts.get(script_id)
         if not script or script.project_id != project_id:
             raise AppError(code="NOT_FOUND", message="Script not found", http_status_code=404)
-        path = audio_file_path(script.storage_dir)
+        try:
+            path = audio_file_path(script.storage_dir)
+        except FileNotFoundError as exc:
+            raise AppError(code="NOT_FOUND", message="Audio not ready", http_status_code=404) from exc
         if not path.is_file():
             raise AppError(code="NOT_FOUND", message="Audio not ready", http_status_code=404)
         return path
@@ -539,18 +578,18 @@ class ProjectsService:
                 session_id=session.id,
             )
 
-        # Ready to generate — start run with clarified brief
+        # Ready to generate — one episode per run
         brief = str(analysis.get("generation_brief") or message).strip()
-        part_count = analysis.get("suggested_part_count") or 4
         run_body = StartRunRequest(
             prompt=brief,
             session_id=session.id,
-            part_count=int(part_count) if part_count else 4,
+            part_count=1,
+            total_duration_sec=DEFAULT_EPISODE_DURATION_SEC,
         )
         run = await self.start_run(project_id, run_body)
         content = reply or (
-            "Starting discovery and the Script Writer now. You can stop anytime. "
-            "When it finishes, review the script and save it as a draft if you like it."
+            "Writing the next episode now. You can stop anytime. "
+            "When it finishes, save it as a draft to lock Cast and continuity."
         )
         _, assistant_id = await append_turn(
             checkpointer,
@@ -588,6 +627,7 @@ class ProjectsService:
         items: list[ChatHistoryItem] = []
         for row in raw:
             preview = None
+            package = None
             draft_id = None
             is_draft = False
             run_status = None
@@ -598,6 +638,7 @@ class ProjectsService:
                     run_status = run.status
                     rr = await self._run_response(run)
                     preview = rr.screenplay_md or rr.screenplay_preview
+                    package = rr.package
                     draft_id = rr.draft_script_id
                     is_draft = rr.is_draft
             items.append(
@@ -610,6 +651,7 @@ class ProjectsService:
                     run_id=str(run_id) if run_id else None,
                     questions=list(row.get("questions") or []),
                     script_preview=preview,
+                    script_package=package,
                     draft_script_id=draft_id,
                     is_draft=is_draft,
                     run_status=run_status,
@@ -639,11 +681,12 @@ class ProjectsService:
     async def list_scripts(self, project_id: str) -> list[ScriptSummaryResponse]:
         await self._require_project(project_id)
         rows = await self._scripts.list_for_project(project_id)
+        latest_id = rows[0].id if rows else None
         out: list[ScriptSummaryResponse] = []
         for script in rows:
             run = await self._runs.get(script.run_id)
-            package = script.package_json or {}
-            title = package.get("title") if isinstance(package, dict) else None
+            package = script.package_json if isinstance(script.package_json, dict) else {}
+            title = package_title(package)
             prompt = (run.prompt if run else "") or ""
             snippet = prompt.strip().replace("\n", " ")
             if len(snippet) > 120:
@@ -654,12 +697,118 @@ class ProjectsService:
                     project_id=script.project_id,
                     run_id=script.run_id,
                     version=script.version,
-                    title=title if isinstance(title, str) else None,
+                    title=title,
                     prompt_snippet=snippet or None,
                     created_at=script.created_at,
+                    part_number=script.part_number or package_part_number(package),
+                    pinned=bool(script.pinned),
+                    cliff_out=package_cliff(package),
+                    is_latest_continuity=script.id == latest_id,
                 )
             )
         return out
+
+    async def pin_script(
+        self, project_id: str, script_id: str, body: PinScriptRequest
+    ) -> ScriptSummaryResponse:
+        await self._require_project(project_id)
+        script = await self._scripts.get(script_id)
+        if not script or script.project_id != project_id:
+            raise AppError(code="NOT_FOUND", message="Script not found", http_status_code=404)
+        updated = await self._scripts.set_pinned(script_id, body.pinned)
+        rows = await self.list_scripts(project_id)
+        for row in rows:
+            if row.id == script_id:
+                return row
+        # Fallback if list empty somehow
+        package = (updated.package_json if updated else {}) or {}
+        return ScriptSummaryResponse(
+            id=script_id,
+            project_id=project_id,
+            run_id=script.run_id,
+            version=script.version,
+            title=package_title(package if isinstance(package, dict) else {}),
+            prompt_snippet=None,
+            created_at=script.created_at,
+            part_number=script.part_number,
+            pinned=body.pinned,
+            cliff_out=package_cliff(package if isinstance(package, dict) else {}),
+            is_latest_continuity=False,
+        )
+
+    async def list_characters(self, project_id: str) -> list[CharacterResponse]:
+        await self._require_project(project_id)
+        rows = await self._characters.list_for_project(project_id)
+        return [CharacterResponse.model_validate(r) for r in rows]
+
+    async def create_character(
+        self, project_id: str, body: CreateCharacterRequest
+    ) -> CharacterResponse:
+        await self._require_project(project_id)
+        key = body.character_key.strip().lower().replace(" ", "_")
+        existing = await self._characters.get_by_key(project_id, key)
+        if existing:
+            raise AppError(
+                code="VALIDATION_ERROR",
+                message="Character key already exists",
+                http_status_code=400,
+            )
+        row = ProjectCharacter(
+            project_id=project_id,
+            character_key=key,
+            name=body.name.strip(),
+            role=body.role,
+            voice=body.voice,
+            speech_patterns=body.speech_patterns,
+            arc=body.arc,
+        )
+        row = await self._characters.create(row)
+        return CharacterResponse.model_validate(row)
+
+    async def update_character(
+        self, project_id: str, character_id: str, body: UpdateCharacterRequest
+    ) -> CharacterResponse:
+        await self._require_project(project_id)
+        row = await self._characters.get(character_id)
+        if not row or row.project_id != project_id:
+            raise AppError(code="NOT_FOUND", message="Character not found", http_status_code=404)
+        if body.name is not None:
+            row.name = body.name.strip()
+        if body.role is not None:
+            row.role = body.role
+        if body.voice is not None:
+            row.voice = body.voice
+        if body.speech_patterns is not None:
+            row.speech_patterns = body.speech_patterns
+        if body.arc is not None:
+            row.arc = body.arc
+        await self._session.flush()
+        await self._session.refresh(row)
+        return CharacterResponse.model_validate(row)
+
+    async def delete_character(self, project_id: str, character_id: str) -> None:
+        await self._require_project(project_id)
+        row = await self._characters.get(character_id)
+        if not row or row.project_id != project_id:
+            raise AppError(code="NOT_FOUND", message="Character not found", http_status_code=404)
+        await self._characters.delete(row)
+
+    async def story_context_summary(self, project_id: str) -> StoryContextSummaryResponse:
+        await self._require_project(project_id)
+        cast = await self._characters.list_for_project(project_id)
+        docs = await self._attachments.list_for_project(project_id)
+        scripts = await self._scripts.list_for_project(project_id)
+        latest_pn = None
+        if scripts:
+            latest_pn = scripts[0].part_number or package_part_number(
+                scripts[0].package_json if isinstance(scripts[0].package_json, dict) else {}
+            )
+        return StoryContextSummaryResponse(
+            cast_count=len(cast),
+            docs_count=len(docs),
+            episode_count=len(scripts),
+            latest_part_number=latest_pn,
+        )
 
     async def get_script(self, project_id: str, script_id: str) -> ScriptDetailResponse:
         await self._require_project(project_id)
@@ -670,38 +819,46 @@ class ProjectsService:
         return ScriptDetailResponse(**detail.model_dump())
 
     async def _script_detail(self, script) -> ScriptLatestResponse:
-        screenplay = ""
-        path = Path(script.screenplay_path)
-        if path.exists():
-            screenplay = path.read_text(encoding="utf-8")
+        screenplay = read_screenplay_artifact(script.screenplay_path)
+        package = script.package_json if isinstance(script.package_json, dict) else {}
         return ScriptLatestResponse(
             id=script.id,
             project_id=script.project_id,
             run_id=script.run_id,
             version=script.version,
-            package=script.package_json,
+            package=package,
             screenplay_md=screenplay,
             created_at=script.created_at,
+            part_number=script.part_number or package_part_number(package),
+            pinned=bool(script.pinned),
+            cliff_out=package_cliff(package),
+            title=package_title(package),
         )
 
     async def _run_response(self, run: ProjectRun) -> RunResponse:
         base = RunResponse.model_validate(run)
         draft = await self._scripts.get_for_run(run.id)
         screenplay = ""
+        package: dict | None = None
         if run.status == "succeeded":
             if draft:
-                path = Path(draft.screenplay_path)
-                if path.exists():
-                    screenplay = path.read_text(encoding="utf-8")
+                screenplay = read_screenplay_artifact(draft.screenplay_path)
+                package = draft.package_json if isinstance(draft.package_json, dict) else None
             if not screenplay:
                 screenplay = read_run_screenplay(run.project_id, run.id)
+            if not package:
+                loaded = read_run_package(run.project_id, run.id)
+                package = loaded if loaded else None
         preview = screenplay[:1200] if screenplay else None
         return base.model_copy(
             update={
                 "screenplay_md": screenplay or None,
                 "screenplay_preview": preview,
+                "package": package,
                 "draft_script_id": draft.id if draft else None,
                 "is_draft": draft is not None,
+                "part_count": run.part_count,
+                "total_duration_sec": run.total_duration_sec,
             }
         )
 

@@ -2,17 +2,29 @@
 
 from __future__ import annotations
 
-import json
 import logging
-from pathlib import Path
 
 from app.agents.graph.graph import RunCancelled, run_project_graph_cancellable
 from app.core.db.session import AsyncSessionLocal
 from app.integrations.databricks_ai_search import AISearchClient
 from app.integrations.s3 import get_artifact_storage
-from app.repository.projects import AttachmentRepository, RunRepository
+from app.repository.projects import (
+    AttachmentRepository,
+    CharacterRepository,
+    RunRepository,
+    ScriptRepository,
+)
 from app.services.projects.chunking import chunk_text
-from app.services.projects.storage import runs_dir
+from app.services.projects.continuity import (
+    bible_characters,
+    character_to_dict,
+    script_to_continuity,
+)
+from app.services.projects.storage import (
+    read_screenplay_artifact,
+    write_run_package,
+    write_run_screenplay,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -67,13 +79,36 @@ async def project_run_job(ctx: dict, project_id: str, run_id: str) -> dict:
         await session.commit()
 
         try:
+            characters = CharacterRepository(session)
+            scripts = ScriptRepository(session)
+            cast_rows = await characters.list_for_project(project_id)
+            series_cast = [character_to_dict(c) for c in cast_rows]
+
+            script_rows = await scripts.list_for_project(project_id)
+            continuity: list[dict] = []
+            if script_rows:
+                latest = script_rows[0]
+                continuity.append(script_to_continuity(latest, is_latest=True))
+                for row in script_rows[1:]:
+                    if row.pinned:
+                        continuity.append(script_to_continuity(row, is_latest=False))
+
+            narration = run.narration_config or {}
+            if run.part_number and run.part_number >= 1:
+                part_number = int(run.part_number)
+            else:
+                part_number = (await scripts.max_part_number(project_id)) + 1
+
             initial = {
                 "project_id": project_id,
                 "run_id": run_id,
                 "prompt": run.prompt,
-                "narration_config": run.narration_config or {},
-                "part_count": run.part_count or 4,
-                "total_duration_sec": run.total_duration_sec or 600,
+                "narration_config": narration if isinstance(narration, dict) else {},
+                "part_count": 1,
+                "total_duration_sec": run.total_duration_sec or 90,
+                "part_number": part_number,
+                "series_cast": series_cast,
+                "continuity_episodes": continuity,
                 "retrieved_chunks": [],
                 "source_md": "",
                 "script_package": None,
@@ -121,12 +156,11 @@ async def project_run_job(ctx: dict, project_id: str, run_id: str) -> dict:
 
             package = result.get("script_package") or {}
             screenplay = result.get("screenplay_md") or ""
-            out_dir = runs_dir(project_id, run_id)
+            write_run_package(project_id, run_id, package if isinstance(package, dict) else {})
+            write_run_screenplay(project_id, run_id, screenplay)
 
-            (out_dir / "script.json").write_text(
-                json.dumps(package, ensure_ascii=False, indent=2), encoding="utf-8"
-            )
-            (out_dir / "screenplay.md").write_text(screenplay, encoding="utf-8")
+            if isinstance(package, dict):
+                await characters.upsert_from_bible(project_id, bible_characters(package))
 
             await runs.update_status(run_id, status="succeeded", error=None)
             await session.commit()
@@ -156,7 +190,6 @@ async def script_audio_job(
 ) -> dict:
     """Render draft screenplay to MP3 via ElevenLabs audiobook pipeline."""
     import asyncio
-    from pathlib import Path
 
     from app.repository.projects import ScriptRepository
     from app.services.projects.audio import render_script_audio, write_audio_status
@@ -167,10 +200,7 @@ async def script_audio_job(
         if not script or script.project_id != project_id:
             return {"ok": False, "error": "script not found"}
 
-        screenplay = ""
-        path = Path(script.screenplay_path)
-        if path.is_file():
-            screenplay = path.read_text(encoding="utf-8")
+        screenplay = read_screenplay_artifact(script.screenplay_path)
         if not screenplay.strip():
             status = write_audio_status(
                 script.storage_dir,

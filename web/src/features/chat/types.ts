@@ -28,6 +28,25 @@ export type AgentToolStep = {
   status: 'pending' | 'running' | 'done' | 'error'
 }
 
+export type ScriptPackagePreview = {
+  title?: string
+  bible?: {
+    characters?: Array<{
+      id?: string
+      name?: string
+      role?: string
+      voice?: string
+      speech_patterns?: string
+      arc?: string
+    }>
+  }
+  parts?: Array<{
+    part_number?: number
+    title?: string
+    cliff_out?: string
+  }>
+}
+
 export type ChatMessage = {
   id: string
   role: 'user' | 'assistant'
@@ -35,6 +54,7 @@ export type ChatMessage = {
   createdAt: number
   activity?: ChatActivity | null
   scriptPreview?: string
+  scriptPackage?: ScriptPackagePreview | null
   scriptId?: string
   runId?: string
   isDraft?: boolean
