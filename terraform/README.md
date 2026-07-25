@@ -103,8 +103,9 @@ Set repository **secrets / variables**:
 
 | Name | Type | Value |
 |------|------|--------|
-| `AWS_ROLE_ARN` | secret | `terraform output -raw github_actions_role_arn` |
-| `AWS_REGION` | variable | e.g. `ap-south-1` |
+| `AWS_ACCESS_KEY_ID` | secret | IAM user access key (deploy user) |
+| `AWS_SECRET_ACCESS_KEY` | secret | IAM user secret key |
+| `AWS_REGION` | variable | e.g. `ap-south-2` |
 | `ECR_REPOSITORY` | variable | `terraform output -raw ecr_repository_name` |
 | `ECS_CLUSTER` | variable | `terraform output -raw ecs_cluster_name` |
 | `ECS_SERVICE_API` | variable | `terraform output -raw ecs_service_api` |
@@ -114,13 +115,7 @@ Set repository **secrets / variables**:
 | `VERCEL_ORG_ID` | secret | from Vercel |
 | `VERCEL_PROJECT_ID` | secret | from Vercel |
 
-Set `github_org` / `github_repo` in `terraform.tfvars` before apply so the OIDC role is created. If the account already has a GitHub OIDC provider, import it:
-
-```bash
-terraform import 'module.github_oidc.aws_iam_openid_connect_provider.github[0]' \
-  arn:aws:iam::ACCOUNT_ID:oidc-provider/token.actions.githubusercontent.com
-```
-
+(`AWS_ROLE_ARN` / OIDC is optional; workflows use access keys.)
 ## First image push (before CI)
 
 ```bash
