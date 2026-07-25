@@ -3,6 +3,7 @@ import { createBrowserRouter, Navigate } from 'react-router-dom'
 import { AppShell } from '@/components/layout/AppShell'
 import { AudienceSimPage } from '@/features/audience/pages/AudienceSimPage'
 import { ProjectChatPage } from '@/features/chat/pages/ProjectChatPage'
+import { DiscoverPage } from '@/features/discover/pages/DiscoverPage'
 import { EditorPage } from '@/features/editor/pages/EditorPage'
 import { ProjectContextPage } from '@/features/projects/pages/ProjectContextPage'
 import { ProjectDraftsPage } from '@/features/projects/pages/ProjectDraftsPage'
@@ -18,6 +19,7 @@ export const router = createBrowserRouter([
     element: <AppShell />,
     children: [
       { index: true, element: <ProjectsPage /> },
+      { path: 'discover', element: <DiscoverPage /> },
       { path: 'audience', element: <AudienceSimPage /> },
       { path: 'projects/:projectId', element: <Navigate to="chat" relative="path" replace /> },
       { path: 'projects/:projectId/chat', element: <ProjectChatPage /> },

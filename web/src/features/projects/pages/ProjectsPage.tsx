@@ -12,14 +12,18 @@ import { useProjects } from '../hooks/use-projects'
 export function ProjectsPage() {
   const { projects, loading, error, create } = useProjects()
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [initialPrompt, setInitialPrompt] = useState<string | undefined>()
   const navigate = useNavigate()
   const [params, setParams] = useSearchParams()
 
   useEffect(() => {
     if (params.get('new') === '1') {
+      const prompt = params.get('prompt') ?? undefined
+      setInitialPrompt(prompt)
       setDialogOpen(true)
       const next = new URLSearchParams(params)
       next.delete('new')
+      next.delete('prompt')
       setParams(next, { replace: true })
     }
   }, [params, setParams])
@@ -63,6 +67,7 @@ export function ProjectsPage() {
       <CreateProjectDialog
         open={dialogOpen}
         onClose={() => setDialogOpen(false)}
+        initialDescription={initialPrompt}
         onCreate={async (input) => {
           const project = await create(input)
           navigate(`/projects/${project.id}/chat`)

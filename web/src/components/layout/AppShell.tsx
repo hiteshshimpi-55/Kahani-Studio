@@ -2,6 +2,7 @@ import {
   Activity,
   ChevronsLeft,
   ChevronsRight,
+  Compass,
   Mic2,
   PenLine,
   Users,
@@ -117,6 +118,7 @@ export function AppShell() {
         <div className={cn('flex-1 overflow-y-auto pt-2.5 pb-3', collapsed ? 'px-1.5' : 'px-2.5')}>
           <nav className="space-y-0.5">
             <SidebarProjects collapsed={collapsed} />
+            <SidebarLink to="/discover" label="Discover" icon={Compass} collapsed={collapsed} />
             <SidebarLink to="/editor" label="Editor" icon={PenLine} collapsed={collapsed} />
             <SidebarLink to="/library" label="Library" icon={Mic2} collapsed={collapsed} />
             <SidebarLink to="/audience" label="Audience Sim" icon={Users} collapsed={collapsed} />

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams, useSearchParams } from 'react-router-dom'
 
 import { KissaLoader } from '@/components/ui/kissa-loader'
 import { useProject } from '@/features/projects/hooks/use-project'
@@ -14,6 +14,7 @@ import { useAgentChat } from '../hooks/use-agent-chat'
 
 export function ProjectChatPage() {
   const { projectId } = useParams<{ projectId: string }>()
+  const [searchParams] = useSearchParams()
   const { project, loading, error } = useProject(projectId)
   const {
     messages,
@@ -32,6 +33,7 @@ export function ProjectChatPage() {
   } = useAgentChat(projectId)
   const [uploading, setUploading] = useState(false)
   const empty = !hydrating && messages.length === 0
+  const initialPrompt = searchParams.get('prompt')?.trim() || undefined
 
   const handlePickPlot = (pitch: PlotPitch) => {
     void send(`Let's go with "${pitch.title}" — ${pitch.logline}`)
@@ -70,6 +72,7 @@ export function ProjectChatPage() {
         {empty ? (
           <ChatEmptyState
             isStreaming={streaming}
+            initialPrompt={initialPrompt}
             onSend={send}
             onStop={stop}
             onAttach={async (file) => {
@@ -95,6 +98,7 @@ export function ProjectChatPage() {
               <ChatComposer
                 isStreaming={streaming}
                 isUploading={uploading}
+                initialValue={initialPrompt}
                 onSend={send}
                 onStop={stop}
                 onAttach={async (file) => {

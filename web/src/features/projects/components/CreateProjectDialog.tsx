@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { Dialog } from '@/components/ui/dialog'
@@ -9,11 +9,16 @@ interface Props {
   open: boolean
   onClose: () => void
   onCreate: (input: { name: string; description?: string }) => Promise<unknown>
+  initialDescription?: string
 }
 
-export function CreateProjectDialog({ open, onClose, onCreate }: Props) {
+export function CreateProjectDialog({ open, onClose, onCreate, initialDescription }: Props) {
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
+
+  useEffect(() => {
+    if (open && initialDescription) setDescription(initialDescription)
+  }, [open, initialDescription])
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
