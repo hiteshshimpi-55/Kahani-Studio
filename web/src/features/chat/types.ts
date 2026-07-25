@@ -17,12 +17,14 @@ export type ChatMessage = {
   scriptId?: string
   runId?: string
   isDraft?: boolean
-  status?: 'streaming' | 'complete' | 'error'
+  questions?: string[]
+  kind?: 'user' | 'reply' | 'clarify' | 'generating' | 'script' | 'stopped'
+  status?: 'streaming' | 'complete' | 'error' | 'stopped'
 }
 
 export const GRAPH_TOOL_STEPS: Omit<AgentToolStep, 'status'>[] = [
-  { id: 'retrieve_context', label: 'Retrieve context', detail: 'Searching project attachments' },
-  { id: 'build_source', label: 'Build source brief', detail: 'Assembling source.md from prompt + RAG' },
+  { id: 'analyze', label: 'Analyze prompt', detail: 'Deciding chat vs audio generation' },
+  { id: 'discovery', label: 'Discovery', detail: 'Gathering context → source.md' },
   { id: 'script_writer', label: 'Script Writer', detail: 'Outline → expand audio screenplay' },
   { id: 'persist', label: 'Write artifacts', detail: 'Saving screenplay package for review' },
 ]

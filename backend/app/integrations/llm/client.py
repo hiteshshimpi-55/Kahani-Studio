@@ -21,8 +21,10 @@ DEFAULT_MODELS = {
 
 def resolve_llm_settings() -> tuple[str, str, str]:
     provider = (settings.llm_provider or "openai").strip().lower()
-    api_key = (settings.llm_api_key or "").strip()
-    model = (settings.llm_model or "").strip() or DEFAULT_MODELS.get(provider, "gpt-4o")
+    api_key = settings.effective_llm_api_key
+    model = (settings.llm_model or settings.openai_model or "").strip() or DEFAULT_MODELS.get(
+        provider, "gpt-4o"
+    )
     return provider, api_key, model
 
 
@@ -31,6 +33,7 @@ async def chat_completion(
     messages: list[dict[str, str]],
     max_tokens: int = 4096,
     temperature: float = 0.7,
+    json_mode: bool = True,
 ) -> str:
     """Run a single chat completion; returns assistant text."""
     provider, api_key, model = resolve_llm_settings()
@@ -38,7 +41,9 @@ async def chat_completion(
         raise RuntimeError("LLM_API_KEY is not set")
 
     if provider == "openai":
-        return await _openai_chat(api_key, model, messages, max_tokens, temperature)
+        return await _openai_chat(
+            api_key, model, messages, max_tokens, temperature, json_mode=json_mode
+        )
     if provider == "anthropic":
         return await _anthropic_chat(api_key, model, messages, max_tokens, temperature)
     raise ValueError(f"Unsupported LLM_PROVIDER: {provider}")
@@ -50,17 +55,21 @@ async def _openai_chat(
     messages: list[dict[str, str]],
     max_tokens: int,
     temperature: float,
+    *,
+    json_mode: bool = True,
 ) -> str:
     from openai import AsyncOpenAI
 
     client = AsyncOpenAI(api_key=api_key)
-    response = await client.chat.completions.create(
-        model=model,
-        messages=messages,  # type: ignore[arg-type]
-        max_tokens=max_tokens,
-        temperature=temperature,
-        response_format={"type": "json_object"},
-    )
+    kwargs: dict[str, Any] = {
+        "model": model,
+        "messages": messages,
+        "max_tokens": max_tokens,
+        "temperature": temperature,
+    }
+    if json_mode:
+        kwargs["response_format"] = {"type": "json_object"}
+    response = await client.chat.completions.create(**kwargs)
     content = response.choices[0].message.content or ""
     return content
 

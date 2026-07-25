@@ -7,15 +7,12 @@ type Props = {
 }
 
 const sizes = {
-  sm: { box: 36, bar: 3 },
-  md: { box: 48, bar: 4 },
-  lg: { box: 64, bar: 5 },
+  sm: { box: 28, bar: 3 },
+  md: { box: 40, bar: 4 },
+  lg: { box: 52, bar: 5 },
 } as const
 
-/**
- * Story-broadcast loader — equalizer bars that rise like audio being written,
- * independent of the logo mark.
- */
+/** Equalizer-style loader (no logo, no broadcast waves). */
 export function KissaLoader({ label = 'Loading…', className, size = 'md' }: Props) {
   const { box, bar } = sizes[size]
 
@@ -26,19 +23,14 @@ export function KissaLoader({ label = 'Loading…', className, size = 'md' }: Pr
       aria-live="polite"
     >
       <div
-        className="kahani-loader"
-        style={{ width: box, height: box }}
+        className="kahani-loader-bars"
+        style={{ height: box * 0.55, gap: bar }}
         aria-hidden
       >
-        <span className="kahani-loader-arc kahani-loader-arc--1" />
-        <span className="kahani-loader-arc kahani-loader-arc--2" />
-        <span className="kahani-loader-arc kahani-loader-arc--3" />
-        <span className="kahani-loader-bars" style={{ gap: bar }}>
-          <i style={{ width: bar }} />
-          <i style={{ width: bar }} />
-          <i style={{ width: bar }} />
-          <i style={{ width: bar }} />
-        </span>
+        <i style={{ width: bar }} />
+        <i style={{ width: bar }} />
+        <i style={{ width: bar }} />
+        <i style={{ width: bar }} />
       </div>
       {label ? (
         <p className="text-[12px] font-medium tracking-wide text-[var(--text-secondary)]">{label}</p>

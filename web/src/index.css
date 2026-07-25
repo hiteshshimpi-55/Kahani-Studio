@@ -241,19 +241,7 @@ body {
   }
 }
 
-/* Story broadcast loader (arcs + equalizer — not the logo) */
-@keyframes kahani-loader-arc-pulse {
-  0%,
-  100% {
-    opacity: 0.2;
-    transform: scale(0.92);
-  }
-  50% {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-
+/* Equalizer loader */
 @keyframes kahani-loader-bar {
   0%,
   100% {
@@ -264,44 +252,9 @@ body {
   }
 }
 
-.kahani-loader {
-  position: relative;
-  display: grid;
-  place-items: center;
-}
-
-.kahani-loader-arc {
-  position: absolute;
-  border: 2px solid transparent;
-  border-top-color: var(--brand);
-  border-right-color: color-mix(in srgb, var(--brand) 55%, transparent);
-  border-radius: 50%;
-  animation: kahani-loader-arc-pulse 1.35s var(--ease-out) infinite;
-}
-
-.kahani-loader-arc--1 {
-  inset: 18%;
-  animation-delay: 0s;
-}
-
-.kahani-loader-arc--2 {
-  inset: 8%;
-  animation-delay: 0.18s;
-  opacity: 0.7;
-}
-
-.kahani-loader-arc--3 {
-  inset: 0;
-  animation-delay: 0.36s;
-  opacity: 0.45;
-}
-
 .kahani-loader-bars {
-  position: relative;
-  z-index: 1;
   display: flex;
   align-items: flex-end;
-  height: 42%;
 }
 
 .kahani-loader-bars i {
@@ -328,6 +281,19 @@ body {
 .kahani-loader-bars i:nth-child(4) {
   animation-delay: 0.36s;
   height: 40%;
+}
+
+/* Settings / overlays */
+.dark .overlay-backdrop {
+  background: transparent;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.overlay-backdrop {
+  background: rgba(28, 25, 23, 0.28);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
 }
 
 /* Settings sheet */

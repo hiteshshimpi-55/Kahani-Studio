@@ -5,6 +5,7 @@ import { cn } from '@/lib/utils'
 
 type Props = {
   onSend: (text: string) => void | Promise<void>
+  onStop?: () => void | Promise<void>
   onAttach?: (file: File) => void | Promise<void>
   isStreaming?: boolean
   isUploading?: boolean
@@ -15,12 +16,13 @@ type Props = {
 
 export function ChatComposer({
   onSend,
+  onStop,
   onAttach,
   isStreaming = false,
   isUploading = false,
   disabled = false,
   variant = 'default',
-  placeholder = 'Describe the story you want to generate…',
+  placeholder = 'Ask anything, or describe the story you want…',
 }: Props) {
   const [value, setValue] = useState('')
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -46,6 +48,7 @@ export function ChatComposer({
     requestAnimationFrame(() => textareaRef.current?.focus())
   }
 
+  // Allow typing while clarifying; only block Enter-submit when streaming generation
   const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
@@ -68,7 +71,7 @@ export function ChatComposer({
         onChange={(e) => setValue(e.target.value)}
         onKeyDown={onKeyDown}
         placeholder={placeholder}
-        disabled={disabled || isStreaming}
+        disabled={disabled}
         rows={hero ? 3 : 1}
         className={cn(
           'w-full resize-none bg-transparent px-2 py-2 text-[14px] leading-6 text-[var(--text-primary)] outline-none placeholder:text-[var(--text-secondary)] disabled:opacity-60',
@@ -106,9 +109,9 @@ export function ChatComposer({
         {isStreaming ? (
           <button
             type="button"
-            className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--text-primary)] text-[var(--surface-2)]"
-            title="Generating…"
-            disabled
+            className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--text-primary)] text-[var(--surface-2)] transition-opacity hover:opacity-90"
+            title="Stop"
+            onClick={() => void onStop?.()}
           >
             <Square className="h-3.5 w-3.5 fill-current" />
           </button>

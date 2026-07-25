@@ -1,6 +1,7 @@
 export type IndexStatus = 'pending' | 'indexed' | 'failed'
 
-export type RunStatus = 'queued' | 'running' | 'succeeded' | 'failed'
+export type RunStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled'
+
 
 export interface Project {
   id: string
@@ -30,10 +31,20 @@ export interface ProjectRun {
   arq_job_id: string | null
   created_at: string
   updated_at: string
+  session_id?: string | null
   screenplay_preview?: string | null
   screenplay_md?: string | null
   draft_script_id?: string | null
   is_draft?: boolean
+}
+
+export interface ChatSession {
+  id: string
+  project_id: string
+  title: string
+  created_at: string
+  updated_at: string
+  run_count: number
 }
 
 export interface ScriptLatest {
@@ -63,6 +74,7 @@ export interface CreateProjectInput {
 
 export interface StartRunInput {
   prompt: string
+  session_id?: string
   narration_config?: Record<string, unknown>
   part_count?: number
   total_duration_sec?: number

@@ -1,10 +1,19 @@
-from fastapi import APIRouter, Depends, File, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Query, Request, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies.db import get_db
-from app.schemas.projects.request import CreateProjectRequest, SaveDraftRequest, StartRunRequest, UpdateScriptRequest
+from app.schemas.projects.request import (
+    ChatMessageRequest,
+    CreateProjectRequest,
+    SaveDraftRequest,
+    StartRunRequest,
+    UpdateScriptRequest,
+)
 from app.schemas.projects.response import (
     AttachmentResponse,
+    ChatHistoryItem,
+    ChatMessageResponse,
+    ChatSessionResponse,
     ProjectResponse,
     RunResponse,
     ScriptDetailResponse,
@@ -46,6 +55,15 @@ async def get_project(
     return await _service(request, db).get_project(project_id)
 
 
+@router.delete("/{project_id}", status_code=204)
+async def delete_project(
+    project_id: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+) -> None:
+    await _service(request, db).delete_project(project_id)
+
+
 @router.post("/{project_id}/attachments", response_model=AttachmentResponse)
 async def upload_attachment(
     project_id: str,
@@ -75,6 +93,56 @@ async def delete_attachment(
     await _service(request, db).delete_attachment(project_id, attachment_id)
 
 
+@router.get("/{project_id}/sessions", response_model=list[ChatSessionResponse])
+async def list_sessions(
+    project_id: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+) -> list[ChatSessionResponse]:
+    return await _service(request, db).list_sessions(project_id)
+
+
+@router.post("/{project_id}/sessions", response_model=ChatSessionResponse)
+async def reset_session(
+    project_id: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+) -> ChatSessionResponse:
+    return await _service(request, db).reset_session(project_id)
+
+
+
+
+@router.post("/{project_id}/chat/messages", response_model=ChatMessageResponse)
+async def post_chat_message(
+    project_id: str,
+    body: ChatMessageRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+) -> ChatMessageResponse:
+    return await _service(request, db).post_chat_message(project_id, body)
+
+
+@router.get("/{project_id}/chat/messages", response_model=list[ChatHistoryItem])
+async def list_chat_messages(
+    project_id: str,
+    request: Request,
+    session_id: str | None = Query(default=None),
+    db: AsyncSession = Depends(get_db),
+) -> list[ChatHistoryItem]:
+    return await _service(request, db).list_chat_history(project_id, session_id=session_id)
+
+
+@router.post("/{project_id}/runs/{run_id}/cancel", response_model=RunResponse)
+async def cancel_run(
+    project_id: str,
+    run_id: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+) -> RunResponse:
+    return await _service(request, db).cancel_run(project_id, run_id)
+
+
 @router.post("/{project_id}/runs", response_model=RunResponse)
 async def start_run(
     project_id: str,
@@ -89,9 +157,10 @@ async def start_run(
 async def list_runs(
     project_id: str,
     request: Request,
+    session_id: str | None = Query(default=None),
     db: AsyncSession = Depends(get_db),
 ) -> list[RunResponse]:
-    return await _service(request, db).list_runs(project_id)
+    return await _service(request, db).list_runs(project_id, session_id=session_id)
 
 
 @router.get("/{project_id}/runs/{run_id}", response_model=RunResponse)

@@ -4,6 +4,7 @@ import logging
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import text
 
 from app.api import error_handlers
 from app.api.router import router as api_router
@@ -21,12 +22,22 @@ configure_logging()
 log = logging.getLogger(__name__)
 
 
+async def _ensure_schema() -> None:
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+        await conn.execute(
+            text(
+                "ALTER TABLE project_runs "
+                "ADD COLUMN IF NOT EXISTS session_id VARCHAR(36)"
+            )
+        )
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     Path(settings.data_dir).mkdir(parents=True, exist_ok=True)
     try:
-        async with engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
+        await _ensure_schema()
     except Exception:
         log.exception(
             "database_startup_failed — API will start; /api/health will show postgres down. "

@@ -2,6 +2,15 @@ import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 
 import { KissaLoader } from '@/components/ui/kissa-loader'
+import { Button } from '@/components/ui/button'
+import {
+  TimelineEditor,
+  buildTimelineFromScript,
+  clearTimeline,
+  loadTimeline,
+  saveTimeline,
+  type TimelineDoc,
+} from '@/features/editor/timeline'
 import { getScript, listProjects, listScripts } from '@/features/projects/api/projects-api'
 import type { Project, ScriptLatest, ScriptSummary } from '@/features/projects/types'
 
@@ -16,6 +25,7 @@ export function EditorPage() {
   const [script, setScript] = useState<ScriptLatest | null>(null)
   const [recent, setRecent] = useState<RecentDraft[]>([])
   const [error, setError] = useState<string | null>(null)
+  const [timeline, setTimeline] = useState<TimelineDoc | null>(null)
 
   useEffect(() => {
     void (async () => {
@@ -23,10 +33,20 @@ export function EditorPage() {
       setError(null)
       try {
         if (projectId && draftId) {
-          setScript(await getScript(projectId, draftId))
+          const s = await getScript(projectId, draftId)
+          setScript(s)
           setRecent([])
+          const stored = loadTimeline(projectId, draftId)
+          if (stored) {
+            setTimeline(stored)
+          } else {
+            const seeded = buildTimelineFromScript(s.package)
+            setTimeline(seeded)
+            saveTimeline(projectId, draftId, seeded)
+          }
         } else {
           setScript(null)
+          setTimeline(null)
           const projects: Project[] = await listProjects()
           const collected: RecentDraft[] = []
           for (const p of projects.slice(0, 8)) {
@@ -52,6 +72,18 @@ export function EditorPage() {
     })()
   }, [projectId, draftId])
 
+  const updateTimeline = (doc: TimelineDoc) => {
+    setTimeline(doc)
+    if (projectId && draftId) saveTimeline(projectId, draftId, doc)
+  }
+
+  const reseeds = () => {
+    if (!script || !projectId || !draftId) return
+    clearTimeline(projectId, draftId)
+    const seeded = buildTimelineFromScript(script.package)
+    updateTimeline(seeded)
+  }
+
   if (loading) {
     return (
       <div className="flex min-h-[50vh] items-center justify-center">
@@ -64,17 +96,17 @@ export function EditorPage() {
     return <p className="text-[13px] text-destructive">{error}</p>
   }
 
-  if (script && projectId) {
+  if (script && projectId && draftId && timeline) {
     const title =
       typeof script.package?.title === 'string' ? script.package.title : `Draft v${script.version}`
     return (
-      <div className="mx-auto max-w-3xl">
+      <div className="mx-auto max-w-6xl">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
-            <p className="text-[12px] text-[var(--text-secondary)]">Editor</p>
+            <p className="text-[12px] text-[var(--text-secondary)]">Editor · multi-track</p>
             <h1 className="mt-1 text-[22px] font-semibold tracking-tight">{title}</h1>
             <p className="mt-1 text-[13px] text-[var(--text-secondary)]">
-              Read-only polish canvas for now ·{' '}
+              One lane per voice · separate Music & SFX ·{' '}
               <Link
                 to={`/projects/${projectId}/drafts?draft=${script.id}`}
                 className="text-[var(--brand)] hover:underline"
@@ -83,12 +115,19 @@ export function EditorPage() {
               </Link>
             </p>
           </div>
+          <Button type="button" size="sm" variant="secondary" onClick={reseeds}>
+            Reseed from script
+          </Button>
         </div>
-        <article className="mt-6 rounded-[12px] border border-[var(--folio-border)] bg-[var(--surface-0)] p-6">
-          <pre className="font-sans text-[14px] leading-7 whitespace-pre-wrap text-[var(--text-primary)]">
-            {script.screenplay_md}
-          </pre>
-        </article>
+
+        <div className="mt-6">
+          <TimelineEditor
+            projectId={projectId}
+            doc={timeline}
+            onChange={updateTimeline}
+            scriptPreview={script.screenplay_md}
+          />
+        </div>
       </div>
     )
   }

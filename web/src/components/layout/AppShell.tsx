@@ -12,7 +12,7 @@ import { BrandMark } from '@/components/brand/BrandMark'
 import { NavSearch } from '@/components/layout/NavSearch'
 import { SidebarProjects } from '@/components/layout/SidebarProjects'
 import { ThemeToggle } from '@/components/theme/ThemeToggle'
-import { SettingsSheet } from '@/features/settings/components/SettingsSheet'
+import { ProfileMenu } from '@/features/settings/components/ProfileMenu'
 import { cn } from '@/lib/utils'
 
 function isNavActive(pathname: string, to: string, end = false) {
@@ -56,44 +56,9 @@ function SidebarLink({ to, label, icon: Icon, end, collapsed }: SidebarLinkProps
   )
 }
 
-function ProfileButton({
-  collapsed,
-  onOpenSettings,
-}: {
-  collapsed: boolean
-  onOpenSettings: () => void
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onOpenSettings}
-      title="Open settings"
-      className={cn(
-        'flex w-full items-center gap-2.5 rounded-[10px] transition-colors hover:bg-[var(--surface-1)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--folio-border-strong)]',
-        collapsed ? 'justify-center p-2' : 'px-2 py-2',
-      )}
-    >
-      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--surface-1)] text-[12px] font-semibold text-[var(--text-primary)] ring-1 ring-[var(--folio-border)]">
-        KS
-      </span>
-      {!collapsed && (
-        <span className="min-w-0 flex-1 text-left">
-          <span className="block truncate text-[13px] font-semibold leading-tight text-[var(--text-primary)]">
-            Kahani Studio
-          </span>
-          <span className="mt-0.5 block truncate text-[11px] leading-tight text-[var(--text-secondary)]">
-            maker@kahani.app
-          </span>
-        </span>
-      )}
-    </button>
-  )
-}
-
 export function AppShell() {
   const { pathname } = useLocation()
   const [collapsed, setCollapsed] = useState(false)
-  const [settingsOpen, setSettingsOpen] = useState(false)
   const isChat = /\/projects\/[^/]+\/chat/.test(pathname)
 
   return (
@@ -169,7 +134,7 @@ export function AppShell() {
             collapsed ? 'p-1.5' : 'p-2.5',
           )}
         >
-          <ProfileButton collapsed={collapsed} onOpenSettings={() => setSettingsOpen(true)} />
+          <ProfileMenu collapsed={collapsed} />
         </div>
       </aside>
 
@@ -188,7 +153,7 @@ export function AppShell() {
           <div className="col-start-2 flex items-center justify-end gap-1 md:col-start-3">
             <ThemeToggle />
             <div className="md:hidden">
-              <ProfileButton collapsed onOpenSettings={() => setSettingsOpen(true)} />
+              <ProfileMenu collapsed />
             </div>
           </div>
         </header>
@@ -203,8 +168,6 @@ export function AppShell() {
           <Outlet />
         </main>
       </div>
-
-      <SettingsSheet open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </div>
   )
 }

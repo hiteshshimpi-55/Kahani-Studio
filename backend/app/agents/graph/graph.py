@@ -1,6 +1,10 @@
+"""Cancellable project graph runner (node-by-node)."""
+
 from __future__ import annotations
 
+import inspect
 import logging
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 from app.agents.graph.nodes_context import build_source, retrieve_context
@@ -8,6 +12,12 @@ from app.agents.graph.state import ProjectGraphState
 from app.agents.script_writer.agent import ScriptWriterAgent, default_narration_config
 
 logger = logging.getLogger(__name__)
+
+CancelCheck = Callable[[], Awaitable[bool]]
+
+
+class RunCancelled(Exception):
+    """Raised when a project run is cancelled mid-graph."""
 
 
 async def script_writer_node(state: ProjectGraphState) -> dict[str, Any]:
@@ -20,6 +30,10 @@ async def script_writer_node(state: ProjectGraphState) -> dict[str, Any]:
         total_duration_sec=state.get("total_duration_sec") or 600,
     )
     return {"script_package": package, "screenplay_md": screenplay}
+
+
+def _noop_persist(state: ProjectGraphState) -> dict[str, Any]:
+    return {}
 
 
 def build_project_graph():
@@ -42,12 +56,33 @@ def build_project_graph():
     return graph.compile()
 
 
-def _noop_persist(state: ProjectGraphState) -> dict[str, Any]:
-    # Persistence happens in the worker after graph invoke (DB session).
-    return {}
-
-
 async def run_project_graph(initial: ProjectGraphState) -> ProjectGraphState:
     graph = build_project_graph()
     result = await graph.ainvoke(initial)
     return result  # type: ignore[return-value]
+
+
+async def run_project_graph_cancellable(
+    initial: ProjectGraphState,
+    *,
+    is_cancelled: CancelCheck,
+) -> ProjectGraphState:
+    """Run discovery → source.md → script writer with cancel checks between nodes."""
+    state: dict[str, Any] = dict(initial)
+    steps: list[Callable[..., Any]] = [
+        retrieve_context,
+        build_source,
+        script_writer_node,
+        _noop_persist,
+    ]
+    for step in steps:
+        if await is_cancelled():
+            raise RunCancelled()
+        result = step(state)  # type: ignore[arg-type]
+        if inspect.isawaitable(result):
+            result = await result
+        if isinstance(result, dict):
+            state.update(result)
+    if await is_cancelled():
+        raise RunCancelled()
+    return state  # type: ignore[return-value]
