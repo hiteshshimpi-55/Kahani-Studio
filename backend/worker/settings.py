@@ -1,12 +1,11 @@
 from arq.connections import RedisSettings
 
-from app.config import settings
+from app.core.config import settings
 
 
 async def ping_job(ctx: dict) -> dict:
-    """Smoke-test job — proves worker + Redis queue are wired. No product logic."""
-    data_dir = settings.data_dir
-    marker = f"{data_dir}/worker_ping.txt"
+    """Smoke-test job — proves worker + Redis queue are wired."""
+    marker = f"{settings.data_dir}/worker_ping.txt"
     with open(marker, "a", encoding="utf-8") as f:
         f.write("ping\n")
     return {"ok": True, "marker": marker}

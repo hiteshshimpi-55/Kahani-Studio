@@ -1,20 +1,4 @@
 services:
-  postgres:
-    image: postgres:16-alpine
-    environment:
-      POSTGRES_USER: kissa
-      POSTGRES_PASSWORD: kissa
-      POSTGRES_DB: kissa
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U kissa -d kissa"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-    ports:
-      - "5432:5432"
-
   redis:
     image: redis:7-alpine
     healthcheck:
@@ -30,15 +14,15 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    env_file:
+      - .env
     environment:
-      DATABASE_URL: postgresql+asyncpg://kissa:kissa@postgres:5432/kissa
-      REDIS_URL: redis://redis:6379/0
-      DATA_DIR: /data
+      DATABASE_URL: ${DATABASE_URL}
+      REDIS_URL: ${REDIS_URL}
+      DATA_DIR: ${DATA_DIR:-/data}
     volumes:
       - kissa_data:/data
     depends_on:
-      postgres:
-        condition: service_healthy
       redis:
         condition: service_healthy
     ports:
@@ -55,15 +39,15 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     command: ["arq", "worker.settings.WorkerSettings"]
+    env_file:
+      - .env
     environment:
-      DATABASE_URL: postgresql+asyncpg://kissa:kissa@postgres:5432/kissa
-      REDIS_URL: redis://redis:6379/0
-      DATA_DIR: /data
+      DATABASE_URL: ${DATABASE_URL}
+      REDIS_URL: ${REDIS_URL}
+      DATA_DIR: ${DATA_DIR:-/data}
     volumes:
       - kissa_data:/data
     depends_on:
-      postgres:
-        condition: service_healthy
       redis:
         condition: service_healthy
       api:
@@ -73,6 +57,8 @@ services:
     build:
       context: ./web
       dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8000}
     depends_on:
       api:
         condition: service_healthy
@@ -80,5 +66,4 @@ services:
       - "5173:80"
 
 volumes:
-  postgres_data:
   kissa_data:
