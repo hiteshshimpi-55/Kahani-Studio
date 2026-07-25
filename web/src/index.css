@@ -91,6 +91,23 @@ body {
   text-rendering: optimizeLegibility;
 }
 
+/* Tailwind v4 preflight no longer sets pointer on buttons */
+@layer base {
+  button:not(:disabled),
+  [role='button']:not([aria-disabled='true']),
+  [role='menuitem']:not([aria-disabled='true']),
+  [role='switch']:not(:disabled),
+  a[href],
+  summary {
+    cursor: pointer;
+  }
+
+  button:disabled,
+  [aria-disabled='true'] {
+    cursor: not-allowed;
+  }
+}
+
 /* Glossy Pocket FM red atmosphere (TCC chat-atmosphere port) */
 .chat-atmosphere {
   position: relative;
