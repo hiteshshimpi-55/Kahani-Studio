@@ -93,9 +93,6 @@ class Settings(BaseSettings):
 
     allowed_origins: list[str] = ["*"]
 
-    @property
-    def databricks_cast_table_fqn(self) -> str:
-        return f"{self.databricks_catalog}.{self.databricks_schema}.{self.databricks_cast_table}"
 
     @property
     def databricks_cast_index_fqn(self) -> str:
