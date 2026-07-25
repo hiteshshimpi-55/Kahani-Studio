@@ -1,3 +1,4 @@
+import { ArrowLeft } from 'lucide-react'
 import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 
@@ -18,36 +19,48 @@ export function ProjectDetailPage() {
 
   if (loading) {
     return (
-      <main className="mx-auto max-w-6xl px-6 py-10">
-        <p className="text-sm text-muted-foreground">Loading project…</p>
-      </main>
+      <div className="mx-auto max-w-6xl">
+        <p className="text-[13px] text-[var(--text-secondary)]">Loading project…</p>
+      </div>
     )
   }
 
   if (error || !project) {
     return (
-      <main className="mx-auto max-w-6xl px-6 py-10">
-        <p className="text-sm text-destructive">{error || 'Project not found'}</p>
-        <Link to="/" className="mt-4 inline-block text-sm text-primary hover:underline">
+      <div className="mx-auto max-w-6xl">
+        <p className="text-[13px] text-destructive">{error || 'Project not found'}</p>
+        <Link
+          to="/"
+          className="mt-4 inline-flex items-center gap-1.5 text-[13px] font-medium text-[var(--brand)] hover:underline"
+        >
+          <ArrowLeft className="h-3.5 w-3.5" />
           Back to projects
         </Link>
-      </main>
+      </div>
     )
   }
 
   return (
-    <main className="mx-auto max-w-6xl px-6 py-10">
-      <Link to="/" className="text-sm text-muted-foreground hover:text-primary">
-        ← Projects
+    <div className="mx-auto max-w-6xl">
+      <Link
+        to="/"
+        className="inline-flex items-center gap-1.5 text-[13px] font-medium text-[var(--text-secondary)] transition-colors hover:text-[var(--text-primary)]"
+      >
+        <ArrowLeft className="h-3.5 w-3.5" />
+        Projects
       </Link>
-      <div className="mt-4">
-        <h1 className="text-2xl font-bold tracking-tight">{project.name}</h1>
+      <div className="mt-3">
+        <h1 className="text-[22px] font-semibold tracking-tight text-[var(--text-primary)]">
+          {project.name}
+        </h1>
         {project.description ? (
-          <p className="mt-2 max-w-2xl text-sm text-muted-foreground">{project.description}</p>
+          <p className="mt-1.5 max-w-2xl text-[13px] text-[var(--text-secondary)]">
+            {project.description}
+          </p>
         ) : null}
       </div>
 
-      <div className="mt-8 grid gap-6 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
+      <div className="mt-6 grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
         <PromptComposer
           prompt={prompt}
           onPromptChange={setPrompt}
@@ -69,6 +82,6 @@ export function ProjectDetailPage() {
           onDelete={attachments.remove}
         />
       </div>
-    </main>
+    </div>
   )
 }

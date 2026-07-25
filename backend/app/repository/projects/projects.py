@@ -70,6 +70,14 @@ class RunRepository:
     async def get(self, run_id: str) -> ProjectRun | None:
         return await self._session.get(ProjectRun, run_id)
 
+    async def list_for_project(self, project_id: str) -> list[ProjectRun]:
+        result = await self._session.execute(
+            select(ProjectRun)
+            .where(ProjectRun.project_id == project_id)
+            .order_by(ProjectRun.created_at.asc())
+        )
+        return list(result.scalars().all())
+
     async def update_status(
         self,
         run_id: str,
@@ -110,6 +118,23 @@ class ScriptRepository:
             .where(Script.project_id == project_id)
             .order_by(Script.version.desc(), Script.created_at.desc())
             .limit(1)
+        )
+        return result.scalar_one_or_none()
+
+    async def list_for_project(self, project_id: str) -> list[Script]:
+        result = await self._session.execute(
+            select(Script)
+            .where(Script.project_id == project_id)
+            .order_by(Script.version.desc(), Script.created_at.desc())
+        )
+        return list(result.scalars().all())
+
+    async def get(self, script_id: str) -> Script | None:
+        return await self._session.get(Script, script_id)
+
+    async def get_for_run(self, run_id: str) -> Script | None:
+        result = await self._session.execute(
+            select(Script).where(Script.run_id == run_id).limit(1)
         )
         return result.scalar_one_or_none()
 

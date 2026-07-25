@@ -36,15 +36,15 @@ export function Dialog({ open, onClose, title, description, children, className 
         aria-modal="true"
         aria-labelledby="dialog-title"
         className={cn(
-          'relative z-10 w-full max-w-md rounded-lg border border-border bg-card p-6 shadow-lg',
+          'relative z-10 w-full max-w-md rounded-[10px] border border-[var(--folio-border)] bg-[var(--surface-2)] p-6 shadow-lg',
           className,
         )}
       >
-        <h2 id="dialog-title" className="text-lg font-semibold text-foreground">
+        <h2 id="dialog-title" className="text-[16px] font-semibold text-[var(--text-primary)]">
           {title}
         </h2>
         {description ? (
-          <p className="mt-1 text-sm text-muted-foreground">{description}</p>
+          <p className="mt-1 text-[13px] text-[var(--text-secondary)]">{description}</p>
         ) : null}
         <div className="mt-4">{children}</div>
       </div>

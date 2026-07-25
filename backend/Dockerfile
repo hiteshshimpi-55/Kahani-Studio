@@ -12,7 +12,7 @@ COPY worker ./worker
 COPY routes ./routes
 COPY contentExtraction ./contentExtraction
 
-RUN pip install --no-cache-dir .
+RUN pip install --no-cache-dir -e .
 
 ENV PYTHONUNBUFFERED=1
 ENV DATA_DIR=/data

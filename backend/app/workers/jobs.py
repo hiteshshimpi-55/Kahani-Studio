@@ -9,8 +9,7 @@ from pathlib import Path
 from app.agents.graph.graph import run_project_graph
 from app.core.db.session import AsyncSessionLocal
 from app.integrations.databricks_ai_search import AISearchClient
-from app.repository.models.project import Script
-from app.repository.projects import AttachmentRepository, RunRepository, ScriptRepository
+from app.repository.projects import AttachmentRepository, RunRepository
 from app.services.projects.chunking import chunk_text
 from app.services.projects.storage import runs_dir
 
@@ -56,7 +55,6 @@ async def delete_attachment_index_job(ctx: dict, project_id: str, attachment_id:
 async def project_run_job(ctx: dict, project_id: str, run_id: str) -> dict:
     async with AsyncSessionLocal() as session:
         runs = RunRepository(session)
-        scripts = ScriptRepository(session)
         run = await runs.get(run_id)
         if not run or run.project_id != project_id:
             return {"ok": False, "error": "run not found"}
@@ -83,25 +81,16 @@ async def project_run_job(ctx: dict, project_id: str, run_id: str) -> dict:
             package = result.get("script_package") or {}
             screenplay = result.get("screenplay_md") or ""
             out_dir = runs_dir(project_id, run_id)
-            version = await scripts.next_version(project_id)
 
-            script_path = out_dir / f"script.v{version}.json"
-            screenplay_path = out_dir / f"screenplay.v{version}.md"
-            script_path.write_text(json.dumps(package, ensure_ascii=False, indent=2), encoding="utf-8")
-            screenplay_path.write_text(screenplay, encoding="utf-8")
-
-            script = Script(
-                project_id=project_id,
-                run_id=run_id,
-                version=version,
-                package_json=package,
-                screenplay_path=str(screenplay_path),
-                storage_dir=str(out_dir),
+            # Persist run artifacts only — drafts are saved explicitly from chat.
+            (out_dir / "script.json").write_text(
+                json.dumps(package, ensure_ascii=False, indent=2), encoding="utf-8"
             )
-            await scripts.create(script)
+            (out_dir / "screenplay.md").write_text(screenplay, encoding="utf-8")
+
             await runs.update_status(run_id, status="succeeded", error=None)
             await session.commit()
-            return {"ok": True, "version": version}
+            return {"ok": True}
         except Exception as exc:
             logger.exception("project_run_job failed")
             await session.rollback()

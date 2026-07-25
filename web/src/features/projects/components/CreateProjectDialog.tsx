@@ -49,7 +49,7 @@ export function CreateProjectDialog({ open, onClose, onCreate }: Props) {
     >
       <form className="space-y-4" onSubmit={(e) => void handleSubmit(e)}>
         <div className="space-y-1.5">
-          <label htmlFor="project-name" className="text-sm font-medium">
+          <label htmlFor="project-name" className="text-[13px] font-medium text-[var(--text-primary)]">
             Name
           </label>
           <Input
@@ -62,8 +62,9 @@ export function CreateProjectDialog({ open, onClose, onCreate }: Props) {
           />
         </div>
         <div className="space-y-1.5">
-          <label htmlFor="project-desc" className="text-sm font-medium">
-            Description <span className="font-normal text-muted-foreground">(optional)</span>
+          <label htmlFor="project-desc" className="text-[13px] font-medium text-[var(--text-primary)]">
+            Description{' '}
+            <span className="font-normal text-[var(--text-secondary)]">(optional)</span>
           </label>
           <Textarea
             id="project-desc"
@@ -71,9 +72,10 @@ export function CreateProjectDialog({ open, onClose, onCreate }: Props) {
             onChange={(e) => setDescription(e.target.value)}
             placeholder="Short pitch or series notes"
             rows={3}
+            className="text-[13px]"
           />
         </div>
-        {error ? <p className="text-sm text-destructive">{error}</p> : null}
+        {error ? <p className="text-[13px] text-destructive">{error}</p> : null}
         <div className="flex justify-end gap-2">
           <Button type="button" variant="ghost" onClick={onClose} disabled={submitting}>
             Cancel

@@ -27,6 +27,49 @@ def runs_dir(project_id: str, run_id: str) -> Path:
     return path
 
 
+def run_screenplay_path(project_id: str, run_id: str) -> Path:
+    return runs_dir(project_id, run_id) / "screenplay.md"
+
+
+def run_package_path(project_id: str, run_id: str) -> Path:
+    return runs_dir(project_id, run_id) / "script.json"
+
+
+def read_run_screenplay(project_id: str, run_id: str) -> str:
+    """Read screenplay for a run (new fixed path, then legacy versioned files)."""
+    primary = run_screenplay_path(project_id, run_id)
+    if primary.exists():
+        return primary.read_text(encoding="utf-8")
+    out = runs_dir(project_id, run_id)
+    legacy = sorted(out.glob("screenplay.v*.md"))
+    if legacy:
+        return legacy[-1].read_text(encoding="utf-8")
+    return ""
+
+
+def read_run_package(project_id: str, run_id: str) -> dict:
+    primary = run_package_path(project_id, run_id)
+    if primary.exists():
+        import json
+
+        try:
+            data = json.loads(primary.read_text(encoding="utf-8"))
+            return data if isinstance(data, dict) else {}
+        except json.JSONDecodeError:
+            return {}
+    out = runs_dir(project_id, run_id)
+    legacy = sorted(out.glob("script.v*.json"))
+    if legacy:
+        import json
+
+        try:
+            data = json.loads(legacy[-1].read_text(encoding="utf-8"))
+            return data if isinstance(data, dict) else {}
+        except json.JSONDecodeError:
+            return {}
+    return {}
+
+
 def local_chunks_dir(project_id: str) -> Path:
     path = project_root(project_id) / "chunks"
     path.mkdir(parents=True, exist_ok=True)

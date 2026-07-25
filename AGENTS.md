@@ -7,9 +7,10 @@ PRD: [docs/PRD.md](docs/PRD.md)
 ## Quick commands
 
 ```bash
-docker compose up --build
+make run                 # hot-reload stack (preferred while developing)
+make prod                # production-like images (rebuild on FE/BE image changes)
 curl -s http://localhost:8000/api/health
-docker compose up --build -d web   # after changing VITE_API_BASE_URL
+make down
 ```
 
 ## Rules
