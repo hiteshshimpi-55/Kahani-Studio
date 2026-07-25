@@ -17,7 +17,8 @@ web/dist/
 data/
 *.log
 .DS_Store
-
+.venv-kissa/
+venv-kissa/
 # IDE
 .idea/
 .vscode/
