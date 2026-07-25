@@ -44,6 +44,14 @@ class Settings(BaseSettings):
     elevenlabs_default_output_format: str = "mp3_44100_128"
     elevenlabs_default_voice_id: str = "JBFqnCBsd6RMkjVDRZzb"  # George (library)
 
+    # Sarvam AI (native Hindi TTS via Bulbul v3). Never commit real keys.
+    sarvam_api_key: str | None = None
+    sarvam_default_speaker: str = "shubh"
+
+    # Default TTS / cast provider: "sarvam" | "elevenlabs"
+    # Per-request override via CastScript.voice_provider / audiobook preview body.
+    tts_provider: str = "sarvam"
+
     # Replicate (identity sheets + scene stills). Never commit real tokens.
     replicate_api_token: str | None = None
     replicate_face_model: str = "black-forest-labs/flux-schnell"
@@ -64,8 +72,8 @@ class Settings(BaseSettings):
     databricks_vector_search_endpoint: str | None = None
     databricks_vector_search_index: str | None = None
     databricks_vector_search_columns: str = (
-        "id,asset_type,provider_id,name,language,gender,description,"
-        "preview_url,free_users_allowed"
+        "id,asset_type,provider,provider_id,name,language,gender,description,"
+        "preview_url,free_users_allowed,tags"
     )
     databricks_catalog: str = "workspace"
     databricks_schema: str = "kissa"

@@ -10,5 +10,10 @@ router = APIRouter(prefix="/cast", tags=["cast"])
 
 @router.post("/recommend", response_model=CastReport)
 async def recommend_cast(body: CastScript) -> CastReport:
-    """Recommend top-2 ElevenLabs voices per character and SFX prompts per scene."""
+    """Recommend voices per character + SFX prompts per scene.
+
+    Set ``voice_provider`` on the body:
+    - ``sarvam`` (default) — search only Sarvam Bulbul v3 speakers
+    - ``elevenlabs`` — search only ElevenLabs library voices
+    """
     return await asyncio.to_thread(CastService().recommend, body)
