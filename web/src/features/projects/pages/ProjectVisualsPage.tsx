@@ -27,12 +27,14 @@ export function ProjectVisualsPage() {
       </p>
       <h1 className="mt-1 text-[22px] font-semibold tracking-tight">Visuals</h1>
       <p className="mt-1 text-[13px] text-[var(--text-secondary)]">
-        Companion frames appear after a draft is generated. Visuals agent wiring comes next.
+        Companion scene images will attach to the audio timeline once the new visual
+        pipeline ships. The previous image-generation stack has been removed.
       </p>
       <div className="mt-10 rounded-[10px] border border-dashed border-[var(--folio-border)] bg-[var(--surface-0)] p-10 text-center">
-        <p className="text-[14px] font-medium">No visuals yet</p>
+        <p className="text-[14px] font-medium">Visuals rebuild in progress</p>
         <p className="mt-1 text-[13px] text-[var(--text-secondary)]">
-          Generate a script draft first, then visuals will attach to parts.
+          See docs/visual-generation-plan.md for the from-scratch design. Generate a
+          script + audio draft first; scene stills will follow that timeline.
         </p>
         <Link
           to={`/projects/${project.id}/chat`}

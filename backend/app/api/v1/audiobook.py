@@ -45,6 +45,15 @@ class SfxClipSummary(BaseModel):
     bytes: int
 
 
+class TimelineEvent(BaseModel):
+    type: str
+    seq_id: str
+    t_start: float
+    t_end: float
+    speaker: str | None = None
+    cue: str | None = None
+
+
 class RenderPreviewResponse(BaseModel):
     series_id: str
     title: str | None
@@ -58,6 +67,8 @@ class RenderPreviewResponse(BaseModel):
     provider_map: dict[str, str] = Field(default_factory=dict)
     bed_prompt: str | None = None
     preview_mp3: str | None = None
+    duration_sec: float = 0.0
+    timeline: list[TimelineEvent] = Field(default_factory=list)
     stems: list[StemSummary]
     sfx_clips: list[SfxClipSummary]
 
@@ -94,6 +105,18 @@ async def render_preview(body: RenderPreviewRequest) -> RenderPreviewResponse:
         provider_map=result.get("provider_map") or {},
         bed_prompt=result.get("bed_prompt"),
         preview_mp3=result.get("preview_mp3"),
+        duration_sec=float(result.get("duration_sec") or 0.0),
+        timeline=[
+            TimelineEvent(
+                type=e["type"],
+                seq_id=e["seq_id"],
+                t_start=e["t_start"],
+                t_end=e["t_end"],
+                speaker=e.get("speaker"),
+                cue=e.get("cue"),
+            )
+            for e in (result.get("timeline") or [])
+        ],
         stems=[
             StemSummary(
                 seq_id=s["seq_id"], speaker=s["speaker"],

@@ -25,9 +25,9 @@ from app.integrations.databricks.sql import (
     upsert_cast_assets,
 )
 from app.integrations.elevenlabs.sfx_catalog import curated_sfx_rows
-from app.integrations.elevenlabs.shot_templates import curated_shot_template_rows
 from app.integrations.elevenlabs.voices import collect_voice_rows
 from app.integrations.sarvam.constants import sarvam_voice_rows
+from app.integrations.visuals.shot_catalog import curated_shot_template_rows
 
 configure_logging()
 log = logging.getLogger("seed_cast_catalog")
@@ -56,11 +56,6 @@ def main(argv: list[str] | None = None) -> int:
         help="Skip voices; only replace with SFX prompt catalog (dev)",
     )
     parser.add_argument(
-        "--shot-templates-only",
-        action="store_true",
-        help="Upsert curated cinematic shot templates without replacing voices/SFX",
-    )
-    parser.add_argument(
         "--sarvam-only",
         action="store_true",
         help="Upsert Sarvam Bulbul v3 voices (does not wipe ElevenLabs / SFX)",
@@ -70,7 +65,36 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Upsert SFX prompt catalog only (does not wipe voices)",
     )
+    parser.add_argument(
+        "--shot-templates-upsert",
+        action="store_true",
+        help="Upsert visual shot-grammar templates (asset_type=shot_template)",
+    )
     args = parser.parse_args(argv)
+
+    # ── Shot templates for Visual Director RAG ───────────────────────
+    if args.shot_templates_upsert:
+        log.info(
+            "seed_shot_templates catalog=%s schema=%s index=%s",
+            settings.databricks_catalog,
+            settings.databricks_schema,
+            settings.databricks_cast_index_fqn,
+        )
+        table = ensure_cast_schema_and_table()
+        log.info("table_ready %s", table)
+        rows = curated_shot_template_rows()
+        log.info("upserting_shot_templates count=%s", len(rows))
+        n = upsert_cast_assets(rows)
+        log.info("shot_templates_upserted %s", n)
+        create_or_get_cast_index()
+        sync_cast_index()
+        if args.skip_index_wait:
+            log.info("skip_index_wait — sync triggered; check dashboard for ONLINE")
+            return 0
+        status = wait_until_online(timeout_sec=1800, poll_sec=20)
+        log.info("index_online status=%s", status.get("status"))
+        log.info("done — shot templates upserted into vector DB")
+        return 0
 
     # ── SFX-only upsert (drama / ambience prompt pack) ───────────────
     if args.sfx_upsert:
@@ -124,7 +148,6 @@ def main(argv: list[str] | None = None) -> int:
     has_key = bool((settings.elevenlabs_api_key or "").strip())
     if (
         not args.sfx_only
-        and not args.shot_templates_only
         and not has_key
         and not args.allow_curated
     ):
@@ -146,60 +169,51 @@ def main(argv: list[str] | None = None) -> int:
     table = ensure_cast_schema_and_table()
     log.info("table_ready %s", table)
 
-    if args.shot_templates_only:
-        shots = curated_shot_template_rows()
-        log.info("upserting_shot_templates count=%s", len(shots))
-        n = upsert_cast_assets(shots)
-        log.info("shot_templates_upserted %s", n)
+    if args.sfx_only:
+        voices: list = []
+        sarvam: list = []
     else:
-        if args.sfx_only:
-            voices: list = []
-            sarvam: list = []
-        else:
-            voices = collect_voice_rows(
-                free_only=args.free_only,
-                curated_fallback=args.allow_curated,
+        voices = collect_voice_rows(
+            free_only=args.free_only,
+            curated_fallback=args.allow_curated,
+        )
+        sarvam = sarvam_voice_rows()
+    sfx = curated_sfx_rows()
+    # Sarvam first in the list so they land in the catalog; casting
+    # still prefers them via provider filter at query time.
+    rows = sarvam + voices + sfx
+    log.info(
+        "rows_prepared sarvam=%s elevenlabs=%s sfx=%s total=%s",
+        len(sarvam),
+        len(voices),
+        len(sfx),
+        len(rows),
+    )
+
+    if not args.sfx_only and not args.allow_curated:
+        if len(voices) < 1000:
+            log.error(
+                "Live voice pull too small (%s). Expected ~15k Voice Library IDs. Aborting.",
+                len(voices),
             )
-            sarvam = sarvam_voice_rows()
-        sfx = curated_sfx_rows()
-        shots = curated_shot_template_rows()
-        # Sarvam first in the list so they land in the catalog; casting
-        # still prefers them via provider filter at query time.
-        rows = sarvam + voices + sfx + shots
+            return 3
+        bad = [r for r in voices if not (r.get("provider_id") or "").strip()]
+        if bad:
+            log.error("voices_missing_provider_id count=%s", len(bad))
+            return 4
+        narr = sum(1 for r in voices if r.get("asset_type") == "narrator_voice")
+        char = sum(1 for r in voices if r.get("asset_type") == "character_voice")
         log.info(
-            "rows_prepared sarvam=%s elevenlabs=%s sfx=%s shots=%s total=%s",
+            "voice_type_split sarvam=%s narrator=%s character=%s sfx=%s",
             len(sarvam),
-            len(voices),
+            narr,
+            char,
             len(sfx),
-            len(shots),
-            len(rows),
         )
 
-        if not args.sfx_only and not args.allow_curated:
-            if len(voices) < 1000:
-                log.error(
-                    "Live voice pull too small (%s). Expected ~15k Voice Library IDs. Aborting.",
-                    len(voices),
-                )
-                return 3
-            bad = [r for r in voices if not (r.get("provider_id") or "").strip()]
-            if bad:
-                log.error("voices_missing_provider_id count=%s", len(bad))
-                return 4
-            narr = sum(1 for r in voices if r.get("asset_type") == "narrator_voice")
-            char = sum(1 for r in voices if r.get("asset_type") == "character_voice")
-            log.info(
-                "voice_type_split sarvam=%s narrator=%s character=%s sfx=%s shots=%s",
-                len(sarvam),
-                narr,
-                char,
-                len(sfx),
-                len(shots),
-            )
-
-        log.info("clearing_and_replacing_cast_assets…")
-        n = replace_cast_assets(rows)
-        log.info("rows_replaced %s", n)
+    log.info("clearing_and_replacing_cast_assets…")
+    n = replace_cast_assets(rows)
+    log.info("rows_replaced %s", n)
 
     create_or_get_cast_index()
     sync_cast_index()

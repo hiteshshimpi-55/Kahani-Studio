@@ -1,5 +1,3 @@
-from typing import Any
-
 from arq.connections import ArqRedis
 
 from app.schemas.jobs.response import EnqueuePingResponse
@@ -15,6 +13,3 @@ class JobsService:
             job_id=job.job_id if job else None,
             queued=True,
         )
-
-    async def enqueue_visual_render(self, payload: dict[str, Any]) -> Any:
-        return await self._redis.enqueue_job("render_visual_track", payload)

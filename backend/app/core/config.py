@@ -48,19 +48,24 @@ class Settings(BaseSettings):
     sarvam_api_key: str | None = None
     sarvam_default_speaker: str = "shubh"
 
-    # Default TTS / cast provider: "sarvam" | "elevenlabs"
+    # Default TTS / cast provider: "elevenlabs" | "sarvam"
     # Per-request override via CastScript.voice_provider / audiobook preview body.
     tts_provider: str = "elevenlabs"
 
-    # Replicate (identity sheets + scene stills). Never commit real tokens.
-    replicate_api_token: str | None = None
-    replicate_face_model: str = "black-forest-labs/flux-schnell"
-    # Pin version — owner/name alone can 404 on predictions.create for some accounts.
-    replicate_pulid_model: str = (
-        "bytedance/flux-pulid:8baa7ef2255075b46f4d91cd238c21d31181b3e6a864463f967960bb0112525b"
-    )
-    replicate_default_width: int = 576
-    replicate_default_height: int = 1024
+    # Gemini — visual director (text) + Nano Banana image generation.
+    gemini_api_key: str | None = None
+    gemini_text_model: str = "gemini-2.5-flash"
+    gemini_image_model: str = "gemini-3.1-flash-image"
+    gemini_image_fallback_model: str = "gemini-2.5-flash-image"
+    # Image provider for lookbook + scene stills: "openai" | "gemini"
+    image_provider: str = "openai"
+    openai_image_model: str = "gpt-image-1"
+    openai_image_fallback_model: str = "gpt-image-1-mini"
+    openai_image_quality: str = "medium"  # low | medium | high (burn credits carefully)
+    # Vertical mobile canvas (Pocket FM / Kuku TV style)
+    visual_video_width: int = 1080
+    visual_video_height: int = 1920
+    visual_video_fps: int = 30
 
     # Databricks workspace + AI Search / Vector Search.
     databricks_host: str | None = None
@@ -68,7 +73,7 @@ class Settings(BaseSettings):
     # Team project-context Direct Access index
     databricks_ai_search_endpoint: str | None = None
     databricks_ai_search_index: str | None = None
-    # Cast / SFX / shot-template Delta Sync index
+    # Cast / SFX Delta Sync index
     databricks_vector_search_endpoint: str | None = None
     databricks_vector_search_index: str | None = None
     databricks_vector_search_columns: str = (

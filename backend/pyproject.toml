@@ -22,8 +22,8 @@ dependencies = [
     "databricks-sdk>=0.103.0",
     "databricks-ai-search>=0.1.0",
     "elevenlabs>=2.58.0",
-    "replicate>=1.0.0",
     "sarvamai>=0.1.28",
+    "google-genai>=1.0.0",
 ]
 
 [build-system]
