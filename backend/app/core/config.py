@@ -37,10 +37,6 @@ class Settings(BaseSettings):
     redis_url: str = "redis://redis:6379/0"
     data_dir: str = "/data"
 
-# Raw artifact blobs (attachments, later audio/visuals). Empty → DATA_DIR fallback.
-    artifacts_bucket: str | None = None
-    aws_region: str = "us-east-1"
-
     # ElevenLabs (TTS / SFX / timeline). Never commit real keys.
     elevenlabs_api_key: str = Field(
         default="",
@@ -71,6 +67,25 @@ class Settings(BaseSettings):
     visual_video_width: int = 1080
     visual_video_height: int = 1920
     visual_video_fps: int = 30
+
+    # S3 artifact store (Terraform: ARTIFACTS_BUCKET). Visuals land here, not on disk.
+    artifacts_bucket: str = Field(
+        default="",
+        validation_alias=AliasChoices("ARTIFACTS_BUCKET", "AWS_S3_BUCKET_NAME"),
+    )
+    aws_region: str = Field(
+        default="ap-south-1",
+        validation_alias=AliasChoices("AWS_REGION", "AWS_REGION_NAME", "AWS_DEFAULT_REGION"),
+    )
+    aws_access_key_id: str = Field(
+        default="",
+        validation_alias=AliasChoices("AWS_ACCESS_KEY_ID"),
+    )
+    aws_secret_access_key: str = Field(
+        default="",
+        validation_alias=AliasChoices("AWS_SECRET_ACCESS_KEY"),
+    )
+    s3_presign_expires_sec: int = 604800  # 7 days
 
     # Databricks workspace + AI Search / Vector Search.
     databricks_host: str | None = None

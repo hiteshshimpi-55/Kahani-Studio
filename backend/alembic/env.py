@@ -16,6 +16,10 @@ target_metadata = Base.metadata
 
 # asyncpg URL → sync for Alembic
 _db_url = settings.database_url.replace("postgresql+asyncpg://", "postgresql://")
+_db_url = _db_url.replace("postgresql+psycopg://", "postgresql://")
+# psycopg2 expects sslmode=, asyncpg uses ssl=
+_db_url = _db_url.replace("ssl=require", "sslmode=require")
+_db_url = _db_url.replace("ssl=true", "sslmode=require")
 config.set_main_option("sqlalchemy.url", _db_url)
 
 

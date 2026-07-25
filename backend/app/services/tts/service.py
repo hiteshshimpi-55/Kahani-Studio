@@ -73,6 +73,23 @@ class TtsService:
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_bytes(result.audio)
 
+        # Mirror stem to S3 when configured (local file kept).
+        try:
+            from app.services.visuals import artifacts as media
+
+            media.publish(
+                out,
+                series_id=request.series_id,
+                kind=media.KIND_TTS,
+                delete_local=False,
+            )
+        except Exception:  # noqa: BLE001
+            import logging
+
+            logging.getLogger(__name__).exception(
+                "tts_s3_publish_failed series=%s seq=%s", request.series_id, request.seq_id
+            )
+
         relative = str(out.relative_to(settings.data_dir))
         return SynthesizeSpeechResponse(
             path=str(out),

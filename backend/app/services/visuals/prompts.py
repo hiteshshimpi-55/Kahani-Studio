@@ -139,10 +139,16 @@ HARD CONSTRAINTS:
 3. For every co-located multi-character scene: include ≥1 two_shot OR group,
    plus OTS coverage. characters_on_screen must list EVERY person visible.
 4. Lab / forensic / "showing the body" beats: mandatory group or two_shot with
-   doctor + police + body/evidence all visible.
-5. Phone-only beats: singles OK; do not invent a second person in the room.
+   doctor + police + body/evidence all visible. Lab must look STERILE and
+   BRIGHT (fluorescent), never horror-dark corridors with glowing eyes.
+5. Phone-only / waking-alone beats: singles OK; establishing bedroom MUST be
+   EMPTY (no person silhouette) before the waking MCU.
 6. Never write "off-screen" for someone who is in that scene's location.
-7. series_id is "{series_id}" — omit from JSON.
+7. Prefer the RETRIEVED SHOT TEMPLATES: copy their shot_size + camera_motion
+   and paraphrase COMPOSE into action. Do not invent random coverage.
+8. Jeep / car departure: prefer windshield POV or exterior jeep headlights —
+   not a fashion portrait of the hero standing in the street.
+9. series_id is "{series_id}" — omit from JSON.
 """
 
 
@@ -151,7 +157,8 @@ def style_suffix(plan: EpisodeVisualPlan) -> str:
     return (
         f" Style: {s.film_look}, {s.palette} palette, {s.lighting} lighting,"
         f" {s.era_setting}. Vertical 9:16 cinematic frame."
-        f" Absolutely no text, captions, watermarks or logos in the image."
+        f" Absolutely no text, captions, subtitles, watermarks, logos, badges with"
+        f" lettering, name tags, or readable writing anywhere in the image."
     )
 
 
@@ -161,7 +168,9 @@ def build_lookbook_prompt(char: CharacterLook, plan: EpisodeVisualPlan, story_da
         f"Character reference sheet, one person only: {char.appearance}. "
         f"Wearing {outfit}. Standing, relaxed neutral pose, facing camera in a "
         f"three-quarter view, full body visible head to shoes, plain dark charcoal "
-        f"studio background, even soft lighting, photorealistic."
+        f"studio background, even soft lighting, photorealistic Indian casting. "
+        f"Plain clothing only — no embroidered words, no agency names on coats, "
+        f"no patches with letters."
         + style_suffix(plan)
     )
 
@@ -198,11 +207,23 @@ def build_shot_prompt(
     ) if who else ""
 
     weather = f", {scene.weather}" if scene.weather else ""
+    empty = (
+        "No people in frame — environment only. "
+        if not who and shot.shot_size in ("establishing_wide", "wide", "insert")
+        else ""
+    )
+    lab_note = ""
+    loc = (scene.location or "").lower()
+    if "lab" in loc or "forensic" in loc:
+        lab_note = (
+            "Bright sterile forensic lab, cool fluorescent lighting, clean metal "
+            "tables, clinical — NOT a dark horror hallway. "
+        )
     return (
         f"Cinematic film still, {size_text}. LOCATION: {scene.location}, "
         f"{scene.time_of_day}{weather}, {scene.mood} mood. "
-        f"{cast_text}"
-        f"ACTION: {shot.action} "
-        f"Camera at eye level, natural film blocking."
+        f"{lab_note}{empty}{cast_text}"
+        f"ACTION (follow exactly): {shot.action} "
+        f"Camera at eye level, natural film blocking. Match reference faces exactly."
         + style_suffix(plan)
     )

@@ -67,6 +67,10 @@ class RenderPreviewResponse(BaseModel):
     provider_map: dict[str, str] = Field(default_factory=dict)
     bed_prompt: str | None = None
     preview_mp3: str | None = None
+    preview_url: str | None = Field(
+        default=None,
+        description="Presigned S3 URL for the preview mix (when ARTIFACTS_BUCKET is set)",
+    )
     duration_sec: float = 0.0
     timeline: list[TimelineEvent] = Field(default_factory=list)
     stems: list[StemSummary]
@@ -82,6 +86,7 @@ async def render_preview(body: RenderPreviewRequest) -> RenderPreviewResponse:
     - ``sarvam``: native Hindi Sarvam Bulbul v3 voices
 
     SFX clips and ambience bed always use ElevenLabs sound generation.
+    Preview MP3s are also uploaded to S3 when ``ARTIFACTS_BUCKET`` is configured.
     """
     result = await asyncio.to_thread(
         AudiobookService().render_preview,
@@ -105,6 +110,7 @@ async def render_preview(body: RenderPreviewRequest) -> RenderPreviewResponse:
         provider_map=result.get("provider_map") or {},
         bed_prompt=result.get("bed_prompt"),
         preview_mp3=result.get("preview_mp3"),
+        preview_url=result.get("preview_url"),
         duration_sec=float(result.get("duration_sec") or 0.0),
         timeline=[
             TimelineEvent(
@@ -132,3 +138,29 @@ async def render_preview(body: RenderPreviewRequest) -> RenderPreviewResponse:
             for c in result.get("sfx_clips") or []
         ],
     )
+
+
+@router.get("/{series_id}")
+async def get_audiobook_assets(series_id: str):
+    """List published audiobook assets for a series (presigned S3 URLs)."""
+    from fastapi import HTTPException
+
+    from app.services.visuals import artifacts as media
+
+    assets = media.urls_by_kind(series_id, media.KIND_TTS)
+    if not assets:
+        # Fall back to local folder listing if not yet migrated
+        from pathlib import Path
+
+        from app.core.config import settings
+
+        local = Path(settings.data_dir) / "tts" / series_id
+        if local.is_dir():
+            assets = {p.name: str(p) for p in local.iterdir() if p.is_file()}
+    if not assets:
+        raise HTTPException(status_code=404, detail=f"no audiobook assets for '{series_id}'")
+    return {
+        "series_id": series_id,
+        "preview_url": assets.get("preview_30s.mp3") or assets.get("preview_raw.mp3"),
+        "assets": assets,
+    }

@@ -18,6 +18,7 @@ from app.repository.models.series import (
     Series,
 )
 from app.repository.models.visual import VisualShotAsset, VisualTrackRecord
+from app.repository.models.visual_media import VisualMediaAsset
 
 __all__ = [
     "CHARACTER_ASSET_KINDS",
@@ -38,6 +39,7 @@ __all__ = [
     "SimPatch",
     "SimRun",
     "VideoContext",
+    "VisualMediaAsset",
     "VisualShotAsset",
     "VisualTrackRecord",
 ]

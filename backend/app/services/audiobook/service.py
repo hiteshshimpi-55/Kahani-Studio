@@ -1082,10 +1082,9 @@ class AudiobookService:
                 [c.id for c in cast_script.characters],
                 len(cast_map),
             )
-        except Exception as exc:
-            log.warning(
-                "cast_search_unavailable (%s) — using local %s voice pool",
-                exc,
+        except Exception:
+            log.exception(
+                "cast_search_failed provider=%s — falling back to local pool",
                 locked_provider,
             )
 
@@ -1451,4 +1450,25 @@ class AudiobookService:
             )
         except Exception:
             log.exception("audio_result_persist_failed series=%s", series_id)
+
+        # Canonical copy on S3 + Postgres map (local files kept).
+        try:
+            from app.services.visuals import artifacts as media
+
+            uploaded = media.publish_tree(out_dir, series_id=series_id, kind=media.KIND_TTS)
+            preview_name = Path(preview_path).name if stems else None
+            result["preview_url"] = (
+                media.url_for(series_id, media.KIND_TTS, preview_name)
+                if preview_name
+                else None
+            )
+            result["assets_uploaded"] = len(uploaded)
+            log.info(
+                "audiobook_s3_publish series=%s files=%d preview_url=%s",
+                series_id, len(uploaded), bool(result.get("preview_url")),
+            )
+        except Exception:
+            log.exception("audiobook_s3_publish_failed series=%s", series_id)
+            result.setdefault("preview_url", None)
+
         return result

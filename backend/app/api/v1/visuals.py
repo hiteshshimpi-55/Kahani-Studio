@@ -1,8 +1,11 @@
-"""Visual episode routes — characters (lookbook) then full video render."""
+"""Visual episode routes — characters (lookbook) then full video render.
+
+Image/video blobs live in S3; Postgres ``visual_media_assets`` maps them.
+APIs return presigned URLs, not local disk paths.
+"""
 
 from __future__ import annotations
 
-import json
 from typing import Any, Literal
 
 from fastapi import APIRouter, HTTPException, Request
@@ -69,6 +72,14 @@ class RenderVisualEpisodeRequest(BaseModel):
     max_sec: float = 120.0
     use_llm_director: bool = True
     plan_only: bool = False
+    force_lookbook: bool = Field(
+        default=False,
+        description="Regenerate character lookbook sheets (and re-plan with vector RAG)",
+    )
+    force_stills: bool = Field(
+        default=False,
+        description="Regenerate scene stills even if cached in S3/local",
+    )
     with_sfx: bool = True
     with_bed: bool = True
     voice_provider: str = "elevenlabs"
@@ -95,41 +106,14 @@ async def build_characters(body: BuildCharactersRequest, request: Request):
 
 @router.get("/{series_id}/characters")
 async def get_characters(series_id: str):
-    """Return locked character looks + lookbook image paths."""
-    service = VisualEpisodeService()
-    plan = service.load_characters(series_id)
-    lookbook_dir = service.out_dir(series_id) / "lookbook"
-    files = (
-        sorted(p.name for p in lookbook_dir.glob("*.png"))
-        if lookbook_dir.exists()
-        else []
-    )
-    if plan is None and not files:
+    """Return locked character looks + lookbook S3 URLs."""
+    payload = VisualEpisodeService().characters_status(series_id)
+    if payload is None:
         raise HTTPException(
             status_code=404,
             detail=f"no characters for '{series_id}' — POST /api/v1/visuals/characters first",
         )
-    characters = []
-    if plan:
-        characters = [
-            {
-                "id": c.id,
-                "name": c.name,
-                "appearance": c.appearance,
-                "wardrobe": c.wardrobe,
-                "facing": c.facing,
-                "reference_image": c.reference_image,
-            }
-            for c in plan.characters
-        ]
-    return {
-        "series_id": series_id,
-        "status": "ready" if characters and files else ("pending" if not characters else "partial"),
-        "characters": characters,
-        "style": plan.style.model_dump() if plan else None,
-        "lookbook_files": files,
-        "lookbook": {c["id"]: c.get("reference_image") for c in characters},
-    }
+    return payload
 
 
 @router.post("/render")
@@ -153,51 +137,14 @@ async def render_visual_episode(body: RenderVisualEpisodeRequest, request: Reque
 
 @router.get("/{series_id}")
 async def get_visual_episode(series_id: str):
-    """Current state of a visual episode: plan, lookbook, stills, video."""
-    service = VisualEpisodeService()
-    out_dir = service.out_dir(series_id)
-    plan_path = out_dir / "plan.json"
-    video = out_dir / "episode.mp4"
-    stills = (
-        sorted(p.name for p in (out_dir / "shots").glob("*.png"))
-        if (out_dir / "shots").exists()
-        else []
-    )
-    lookbook = (
-        sorted(p.name for p in (out_dir / "lookbook").glob("*.png"))
-        if (out_dir / "lookbook").exists()
-        else []
-    )
-    chars = service.load_characters(series_id)
-
-    if not plan_path.exists() and not video.exists() and chars is None and not lookbook:
-        audio = service.load_audio_result(series_id)
-        if audio is None:
-            raise HTTPException(
-                status_code=404,
-                detail=(
-                    f"no visual episode for series '{series_id}' — "
-                    "audiobook → POST /visuals/characters → POST /visuals/render"
-                ),
-            )
-        return {
-            "series_id": series_id,
-            "status": "pending",
-            "plan": None,
-            "lookbook": lookbook,
-            "stills": stills,
-            "video_path": None,
-            "characters_ready": False,
-            "duration_sec": audio.get("duration_sec"),
-        }
-
-    return {
-        "series_id": series_id,
-        "status": "ready" if video.exists() else ("characters_ready" if chars and not plan_path.exists() else "planned"),
-        "plan": json.loads(plan_path.read_text()) if plan_path.exists() else None,
-        "lookbook": lookbook,
-        "stills": stills,
-        "video_path": str(video) if video.exists() else None,
-        "shot_count": len(stills),
-        "characters_ready": bool(chars and chars.characters),
-    }
+    """Current state of a visual episode: plan, lookbook, stills, video (S3 URLs)."""
+    payload = VisualEpisodeService().episode_status(series_id)
+    if payload.get("status") == "missing":
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                f"no visual episode for series '{series_id}' — "
+                "audiobook → POST /visuals/characters → POST /visuals/render"
+            ),
+        )
+    return payload

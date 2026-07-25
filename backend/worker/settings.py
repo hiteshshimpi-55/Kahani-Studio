@@ -7,8 +7,8 @@ from app.workers.jobs import (
     delete_attachment_index_job,
     index_attachment_job,
     project_run_job,
-    script_audio_job,
 )
+
 
 async def ping_job(ctx: dict) -> dict:
     """Smoke-test job — proves worker + Redis queue are wired."""
@@ -169,6 +169,8 @@ async def visual_episode_job(ctx: dict, payload: dict) -> dict:
             plan_only=bool(payload.get("plan_only", False)),
             image_provider=provider,
             require_lookbook=bool(payload.get("require_lookbook", True)),
+            force_lookbook=bool(payload.get("force_lookbook", False)),
+            force_stills=bool(payload.get("force_stills", False)),
         )
 
     return await asyncio.to_thread(_run)
@@ -193,7 +195,6 @@ class WorkerSettings:
         index_attachment_job,
         delete_attachment_index_job,
         project_run_job,
-        script_audio_job,
         tts_synthesize_job,
         visual_characters_job,
         visual_episode_job,
