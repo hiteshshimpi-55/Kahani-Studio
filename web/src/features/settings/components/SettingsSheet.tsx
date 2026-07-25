@@ -1,5 +1,6 @@
 import { Info, Settings2, User, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useTheme } from 'next-themes'
 
 import { BrandMark } from '@/components/brand/BrandMark'
@@ -21,14 +22,19 @@ export function SettingsSheet({ open, onClose }: Props) {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose()
     }
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
     window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
+    return () => {
+      document.body.style.overflow = prev
+      window.removeEventListener('keydown', onKey)
+    }
   }, [open, onClose])
 
   if (!open) return null
 
-  return (
-    <div className="fixed inset-0 z-[80] flex justify-end">
+  return createPortal(
+    <div className="fixed inset-0 z-[100] flex justify-end">
       <button
         type="button"
         aria-label="Close settings"
@@ -157,6 +163,7 @@ export function SettingsSheet({ open, onClose }: Props) {
           </div>
         </div>
       </aside>
-    </div>
+    </div>,
+    document.body,
   )
 }

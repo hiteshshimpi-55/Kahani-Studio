@@ -1,6 +1,7 @@
 import { cn } from '@/lib/utils'
 import type { ReactNode } from 'react'
 import { useEffect } from 'react'
+import { createPortal } from 'react-dom'
 
 interface DialogProps {
   open: boolean
@@ -17,14 +18,19 @@ export function Dialog({ open, onClose, title, description, children, className 
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose()
     }
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
     window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
+    return () => {
+      document.body.style.overflow = prev
+      window.removeEventListener('keydown', onKey)
+    }
   }, [open, onClose])
 
   if (!open) return null
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+  return createPortal(
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
       <button
         type="button"
         aria-label="Close dialog"
@@ -48,6 +54,7 @@ export function Dialog({ open, onClose, title, description, children, className 
         ) : null}
         <div className="mt-4">{children}</div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
