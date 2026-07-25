@@ -1,11 +1,12 @@
-import { useState } from 'react'
+import { useState,useEffect } from 'react'
 import { useParams, useSearchParams } from 'react-router-dom'
 
 import { KissaLoader } from '@/components/ui/kissa-loader'
 import { useProject } from '@/features/projects/hooks/use-project'
+import { useStoryContextSummary } from '@/features/projects/hooks/use-story-context'
 import { NotFoundView } from '@/features/system/pages/NotFoundPage'
 
-import type { PlotPitch } from '../types'
+import type { ChatMessage, PlotPitch } from '../types'
 import { ChatComposer } from '../components/ChatComposer'
 import { ChatEmptyState } from '../components/ChatEmptyState'
 import { ChatMessageList } from '../components/ChatMessageList'
@@ -31,13 +32,43 @@ export function ProjectChatPage() {
     addSession,
     selectSession,
   } = useAgentChat(projectId)
+  const { summary, refresh: refreshContext } = useStoryContextSummary(projectId)
   const [uploading, setUploading] = useState(false)
   const empty = !hydrating && messages.length === 0
   const initialPrompt = searchParams.get('prompt')?.trim() || undefined
 
+  useEffect(() => {
+    if (!streaming) void refreshContext()
+  }, [streaming, refreshContext])
+
   const handlePickPlot = (pitch: PlotPitch) => {
     void send(`Let's go with "${pitch.title}" — ${pitch.logline}`)
   }
+
+  const handleContinue = (message: ChatMessage) => {
+    const partNo = message.scriptPackage?.parts?.[0]?.part_number
+    const cliff = message.scriptPackage?.parts?.[0]?.cliff_out
+    const next = partNo != null ? partNo + 1 : undefined
+    const prompt = next
+      ? `Continue to episode ${next}.${cliff ? ` Pick up from this cliff: ${cliff}` : ''}`
+      : `Continue to the next episode.${cliff ? ` Pick up from this cliff: ${cliff}` : ''}`
+    void send(prompt.trim())
+  }
+
+  const contextChip =
+    summary && (summary.cast_count > 0 || summary.docs_count > 0 || summary.episode_count > 0)
+      ? [
+          summary.cast_count ? `Cast ${summary.cast_count}` : null,
+          summary.docs_count ? `Docs ${summary.docs_count}` : null,
+          summary.latest_part_number != null
+            ? `Ep.${summary.latest_part_number}`
+            : summary.episode_count
+              ? `Eps ${summary.episode_count}`
+              : null,
+        ]
+          .filter(Boolean)
+          .join(' · ')
+      : null
 
   if (loading || hydrating) {
     return (
@@ -89,6 +120,7 @@ export function ProjectChatPage() {
                 onSaveDraft={saveDraft}
                 onUpdateDraft={updateDraft}
                 onPickPlot={handlePickPlot}
+                onContinueEpisode={handleContinue}
               />
             </div>
             <div className="relative z-10 mx-auto w-full max-w-[760px] shrink-0 bg-gradient-to-t from-[var(--surface-2)] via-[var(--surface-2)] to-transparent px-4 pt-5 pb-4 md:px-6">
@@ -99,6 +131,8 @@ export function ProjectChatPage() {
                 isStreaming={streaming}
                 isUploading={uploading}
                 initialValue={initialPrompt}
+                contextChip={contextChip}
+                contextHref={`/projects/${projectId}/context`}
                 onSend={send}
                 onStop={stop}
                 onAttach={async (file) => {

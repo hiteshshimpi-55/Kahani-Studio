@@ -6,11 +6,19 @@ export type PlotPitch = {
   tone: string
 }
 
+export type PitchResearchMeta = {
+  extraction?: boolean
+  tavily?: boolean
+  topic?: string | null
+  similar_works?: number
+  sources?: number
+}
+
 export type ChatStreamEvent =
   | { type: 'start'; assistant_id: string; session_id: string }
   | { type: 'status'; phase: string; label: string; action?: string }
   | { type: 'text_delta'; delta: string }
-  | { type: 'plot_pitches'; pitches: PlotPitch[] }
+  | { type: 'plot_pitches'; pitches: PlotPitch[]; research?: PitchResearchMeta }
   | {
       type: 'run_started'
       id: string
@@ -31,6 +39,7 @@ export type ChatStreamEvent =
       questions?: string[]
       action?: string
       plot_pitches?: PlotPitch[]
+      research?: PitchResearchMeta
       created_at: string
     }
   | { type: 'error'; message: string }

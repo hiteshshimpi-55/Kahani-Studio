@@ -211,9 +211,9 @@ body {
   width: 100%;
   max-width: min(100%, 40rem);
   margin-inline: auto;
-  min-height: 1.4em;
-  font-size: clamp(0.9rem, 2.1vw + 0.4rem, 1.55rem);
-  line-height: 1.4;
+  min-height: 1.35em;
+  font-size: clamp(1.05rem, 2.2vw + 0.45rem, 1.7rem);
+  line-height: 1.35;
 }
 
 .chat-typewriter-line {

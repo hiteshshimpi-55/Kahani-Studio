@@ -39,10 +39,11 @@ PHRASES: dict[ChatPhase, list[str]] = {
         "Connecting the dots from your context…",
     ],
     "discovering": [
-        "Exploring story directions…",
-        "Dreaming up plots…",
-        "Searching for the perfect hook…",
-        "Brewing some ideas…",
+        "Researching the world of your story…",
+        "Pulling references from the web…",
+        "Exploring similar works and tone…",
+        "Gathering discovery context…",
+        "Dreaming up plots with research…",
         "Crafting plot pitches…",
     ],
     "writing": [
@@ -88,7 +89,7 @@ def phases_for_action(action: ChatAction, *, has_attachments: bool) -> list[Chat
         return ["thinking", "discovering"]
     if action == "rewrite":
         return ["thinking", "rewriting"]
-    # generate
+    # generate — real Tavily research runs in stream (not a flash status)
     phases: list[ChatPhase] = ["thinking", "figuring"]
     if has_attachments:
         phases.append("context")

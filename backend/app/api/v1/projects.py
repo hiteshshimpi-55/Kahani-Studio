@@ -6,14 +6,19 @@ from sse_starlette.sse import EventSourceResponse
 from app.api.dependencies.db import get_db
 from app.schemas.projects.request import (
     ChatMessageRequest,
+    CreateCharacterRequest,
     CreateProjectRequest,
     GenerateScriptAudioRequest,
+    PinScriptRequest,
+    RejectStageRequest,
     SaveDraftRequest,
     StartRunRequest,
+    UpdateCharacterRequest,
     UpdateScriptRequest,
 )
 from app.schemas.projects.response import (
     AttachmentResponse,
+    CharacterResponse,
     ChatHistoryItem,
     ChatMessageResponse,
     ChatSessionResponse,
@@ -23,6 +28,7 @@ from app.schemas.projects.response import (
     ScriptDetailResponse,
     ScriptLatestResponse,
     ScriptSummaryResponse,
+    StoryContextSummaryResponse,
 )
 from app.schemas.story_analysis.request import StoryAnalysisRequest
 from app.schemas.story_analysis.response import StoryAnalysisResponse
@@ -213,6 +219,85 @@ async def save_run_as_draft(
     return await _service(request, db).save_run_as_draft(project_id, run_id, body)
 
 
+@router.post(
+    "/{project_id}/runs/{run_id}/stages/{stage}/approve",
+    response_model=RunResponse,
+)
+async def approve_stage(
+    project_id: str,
+    run_id: str,
+    stage: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+) -> RunResponse:
+    return await _service(request, db).approve_stage(project_id, run_id, stage)
+
+
+@router.post(
+    "/{project_id}/runs/{run_id}/stages/{stage}/reject",
+    response_model=RunResponse,
+)
+async def reject_stage(
+    project_id: str,
+    run_id: str,
+    stage: str,
+    body: RejectStageRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+) -> RunResponse:
+    return await _service(request, db).reject_stage(project_id, run_id, stage, body)
+
+
+@router.post(
+    "/{project_id}/runs/{run_id}/visuals/start",
+    response_model=RunResponse,
+)
+async def start_run_visuals(
+    project_id: str,
+    run_id: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+) -> RunResponse:
+    """Optional: after audio, build lookbook + scene stills for this run."""
+    return await _service(request, db).start_visuals(project_id, run_id)
+
+
+@router.post(
+    "/{project_id}/runs/{run_id}/visuals/skip",
+    response_model=RunResponse,
+)
+async def skip_run_visuals(
+    project_id: str,
+    run_id: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+) -> RunResponse:
+    """Decline companion visuals and continue the cover/assembly path."""
+    return await _service(request, db).skip_visuals(project_id, run_id)
+
+
+@router.get("/{project_id}/runs/{run_id}/audio/file")
+async def get_run_audio_file(
+    project_id: str,
+    run_id: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+) -> FileResponse:
+    path = await _service(request, db).get_run_audio_file_path(project_id, run_id)
+    return FileResponse(path, media_type="audio/mpeg", filename="episode.mp3")
+
+
+@router.get("/{project_id}/runs/{run_id}/cover")
+async def get_run_cover_file(
+    project_id: str,
+    run_id: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+) -> FileResponse:
+    path = await _service(request, db).get_run_cover_file_path(project_id, run_id)
+    return FileResponse(path, media_type="image/png", filename="cover.png")
+
+
 @router.get("/{project_id}/scripts/latest", response_model=ScriptLatestResponse)
 async def latest_script(
     project_id: str,
@@ -229,6 +314,75 @@ async def list_scripts(
     db: AsyncSession = Depends(get_db),
 ) -> list[ScriptSummaryResponse]:
     return await _service(request, db).list_scripts(project_id)
+
+
+@router.post(
+    "/{project_id}/scripts/{script_id}/pin",
+    response_model=ScriptSummaryResponse,
+)
+async def pin_script(
+    project_id: str,
+    script_id: str,
+    body: PinScriptRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+) -> ScriptSummaryResponse:
+    return await _service(request, db).pin_script(project_id, script_id, body)
+
+
+@router.get("/{project_id}/characters", response_model=list[CharacterResponse])
+async def list_characters(
+    project_id: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+) -> list[CharacterResponse]:
+    return await _service(request, db).list_characters(project_id)
+
+
+@router.post("/{project_id}/characters", response_model=CharacterResponse)
+async def create_character(
+    project_id: str,
+    body: CreateCharacterRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+) -> CharacterResponse:
+    return await _service(request, db).create_character(project_id, body)
+
+
+@router.patch(
+    "/{project_id}/characters/{character_id}",
+    response_model=CharacterResponse,
+)
+async def update_character(
+    project_id: str,
+    character_id: str,
+    body: UpdateCharacterRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+) -> CharacterResponse:
+    return await _service(request, db).update_character(project_id, character_id, body)
+
+
+@router.delete("/{project_id}/characters/{character_id}", status_code=204)
+async def delete_character(
+    project_id: str,
+    character_id: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+) -> None:
+    await _service(request, db).delete_character(project_id, character_id)
+
+
+@router.get(
+    "/{project_id}/story-context",
+    response_model=StoryContextSummaryResponse,
+)
+async def story_context_summary(
+    project_id: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+) -> StoryContextSummaryResponse:
+    return await _service(request, db).story_context_summary(project_id)
 
 
 @router.get("/{project_id}/scripts/{script_id}", response_model=ScriptDetailResponse)

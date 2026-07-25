@@ -26,6 +26,25 @@ class AttachmentResponse(BaseModel):
     created_at: datetime
 
 
+class RunArtifactsResponse(BaseModel):
+    screenplay_key: str | None = None
+    package_key: str | None = None
+    audio_key: str | None = None
+    cover_key: str | None = None
+    manifest_key: str | None = None
+    audio_url: str | None = None
+    cover_url: str | None = None
+    visuals_series_id: str | None = None
+    visuals_url: str | None = None
+
+
+class RunProgressResponse(BaseModel):
+    total_lines: int | None = None
+    lines_rendered: int | None = None
+    duration_sec: float | None = None
+    current_step: str | None = None
+
+
 class RunResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -38,10 +57,19 @@ class RunResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     session_id: str | None = None
+    part_count: int | None = None
+    total_duration_sec: int | None = None
     screenplay_preview: str | None = None
     screenplay_md: str | None = None
+    package: dict | None = None
     draft_script_id: str | None = None
     is_draft: bool = False
+    cast_updated: bool = False
+    current_stage: str | None = None
+    stage_statuses: dict[str, str] | None = None
+    artifacts: RunArtifactsResponse | None = None
+    progress: RunProgressResponse | None = None
+    revision_notes: str | None = None
 
 
 class ChatSessionResponse(BaseModel):
@@ -63,6 +91,10 @@ class ScriptLatestResponse(BaseModel):
     package: dict
     screenplay_md: str
     created_at: datetime
+    part_number: int | None = None
+    pinned: bool = False
+    cliff_out: str | None = None
+    title: str | None = None
 
 
 class ScriptSummaryResponse(BaseModel):
@@ -73,10 +105,36 @@ class ScriptSummaryResponse(BaseModel):
     title: str | None
     prompt_snippet: str | None
     created_at: datetime
+    part_number: int | None = None
+    pinned: bool = False
+    cliff_out: str | None = None
+    is_latest_continuity: bool = False
 
 
 class ScriptDetailResponse(ScriptLatestResponse):
     pass
+
+
+class CharacterResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    project_id: str
+    character_key: str
+    name: str
+    role: str | None = None
+    voice: str | None = None
+    speech_patterns: str | None = None
+    arc: str | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class StoryContextSummaryResponse(BaseModel):
+    cast_count: int
+    docs_count: int
+    episode_count: int
+    latest_part_number: int | None = None
 
 
 class ScriptAudioStatusResponse(BaseModel):
@@ -120,6 +178,7 @@ class ChatHistoryItem(BaseModel):
     questions: list[str] = []
     plot_pitches: list[PlotPitchItem] = []
     script_preview: str | None = None
+    script_package: dict | None = None
     draft_script_id: str | None = None
     is_draft: bool = False
     run_status: str | None = None

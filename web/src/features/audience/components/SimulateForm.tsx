@@ -1,6 +1,8 @@
 import { useState } from 'react'
 
-import { cn } from '@/lib/utils'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 
 import type { SimulateRequest } from '../types'
 
@@ -8,6 +10,9 @@ interface Props {
   onSubmit: (req: SimulateRequest) => void
   busy: boolean
 }
+
+const fieldClass =
+  'flex h-9 w-full rounded-[6px] border border-[var(--folio-border)] bg-[var(--surface-0)] px-3 py-2 text-[13px] text-[var(--text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--folio-border-strong)]'
 
 export function SimulateForm({ onSubmit, busy }: Props) {
   const [episodeId, setEpisodeId] = useState('ep-001')
@@ -34,27 +39,25 @@ export function SimulateForm({ onSubmit, busy }: Props) {
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-      <div className="grid grid-cols-2 gap-3">
-        <label className="flex flex-col gap-1 text-sm">
-          <span className="text-stone-500">Episode ID</span>
-          <input
-            className="rounded border border-stone-300 bg-white px-3 py-1.5 text-sm"
-            value={episodeId}
-            onChange={(e) => setEpisodeId(e.target.value)}
-          />
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <label className="flex flex-col gap-1.5 text-[13px]">
+          <span className="text-[11px] font-semibold tracking-[0.12em] text-[var(--text-muted)] uppercase">
+            Episode ID
+          </span>
+          <Input value={episodeId} onChange={(e) => setEpisodeId(e.target.value)} />
         </label>
-        <label className="flex flex-col gap-1 text-sm">
-          <span className="text-stone-500">Series ID</span>
-          <input
-            className="rounded border border-stone-300 bg-white px-3 py-1.5 text-sm"
-            value={seriesId}
-            onChange={(e) => setSeriesId(e.target.value)}
-          />
+        <label className="flex flex-col gap-1.5 text-[13px]">
+          <span className="text-[11px] font-semibold tracking-[0.12em] text-[var(--text-muted)] uppercase">
+            Series ID
+          </span>
+          <Input value={seriesId} onChange={(e) => setSeriesId(e.target.value)} />
         </label>
-        <label className="flex flex-col gap-1 text-sm">
-          <span className="text-stone-500">Language</span>
+        <label className="flex flex-col gap-1.5 text-[13px]">
+          <span className="text-[11px] font-semibold tracking-[0.12em] text-[var(--text-muted)] uppercase">
+            Language
+          </span>
           <select
-            className="rounded border border-stone-300 bg-white px-3 py-1.5 text-sm"
+            className={fieldClass}
             value={language}
             onChange={(e) => setLanguage(e.target.value)}
           >
@@ -62,13 +65,11 @@ export function SimulateForm({ onSubmit, busy }: Props) {
             <option value="english">English</option>
           </select>
         </label>
-        <label className="flex flex-col gap-1 text-sm">
-          <span className="text-stone-500">Genre</span>
-          <select
-            className="rounded border border-stone-300 bg-white px-3 py-1.5 text-sm"
-            value={genre}
-            onChange={(e) => setGenre(e.target.value)}
-          >
+        <label className="flex flex-col gap-1.5 text-[13px]">
+          <span className="text-[11px] font-semibold tracking-[0.12em] text-[var(--text-muted)] uppercase">
+            Genre
+          </span>
+          <select className={fieldClass} value={genre} onChange={(e) => setGenre(e.target.value)}>
             <option value="thriller">Thriller</option>
             <option value="romance">Romance</option>
             <option value="drama">Drama</option>
@@ -77,49 +78,46 @@ export function SimulateForm({ onSubmit, busy }: Props) {
             <option value="comedy">Comedy</option>
           </select>
         </label>
-        <label className="flex flex-col gap-1 text-sm">
-          <span className="text-stone-500">Title</span>
-          <input
-            className="rounded border border-stone-300 bg-white px-3 py-1.5 text-sm"
+        <label className="flex flex-col gap-1.5 text-[13px]">
+          <span className="text-[11px] font-semibold tracking-[0.12em] text-[var(--text-muted)] uppercase">
+            Title
+          </span>
+          <Input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             placeholder="Optional"
           />
         </label>
-        <label className="flex flex-col gap-1 text-sm">
-          <span className="text-stone-500">Parts</span>
-          <input
+        <label className="flex flex-col gap-1.5 text-[13px]">
+          <span className="text-[11px] font-semibold tracking-[0.12em] text-[var(--text-muted)] uppercase">
+            Parts
+          </span>
+          <Input
             type="number"
             min={1}
             max={20}
-            className="rounded border border-stone-300 bg-white px-3 py-1.5 text-sm"
             value={partCount}
             onChange={(e) => setPartCount(Number(e.target.value))}
           />
         </label>
       </div>
 
-      <label className="flex flex-col gap-1 text-sm">
-        <span className="text-stone-500">Script</span>
-        <textarea
-          className="h-40 resize-y rounded border border-stone-300 bg-white px-3 py-2 font-mono text-xs"
+      <label className="flex flex-col gap-1.5 text-[13px]">
+        <span className="text-[11px] font-semibold tracking-[0.12em] text-[var(--text-muted)] uppercase">
+          Script
+        </span>
+        <Textarea
+          className="h-40 resize-y font-mono text-[12px]"
           value={script}
           onChange={(e) => setScript(e.target.value)}
-          placeholder="Paste full episode script here..."
+          placeholder="Paste full episode script here…"
           required
         />
       </label>
 
-      <button
-        type="submit"
-        disabled={busy || !script.trim()}
-        className={cn(
-          'self-start rounded bg-stone-900 px-5 py-2 text-sm text-stone-50',
-          'disabled:opacity-50',
-        )}
-      >
+      <Button type="submit" disabled={busy || !script.trim()} className="self-start">
         {busy ? 'Starting simulation…' : 'Run audience simulation'}
-      </button>
+      </Button>
     </form>
   )
 }

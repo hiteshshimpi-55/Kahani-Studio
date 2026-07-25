@@ -19,11 +19,17 @@ from app.schemas.extraction.response import ExtractionResponse
 
 
 def _tavily() -> TavilyClient:
-    return TavilyClient(api_key=settings.tavily_api_key)
+    key = (settings.tavily_api_key or "").strip()
+    if not key:
+        raise RuntimeError("TAVILY_API_KEY is not set")
+    return TavilyClient(api_key=key)
 
 
 def _openai() -> OpenAI:
-    return OpenAI(api_key=settings.openai_api_key)
+    key = settings.effective_llm_api_key
+    if not key:
+        raise RuntimeError("LLM_API_KEY / OPENAI_API_KEY is not set")
+    return OpenAI(api_key=key)
 
 
 def _build_queries(extraction: ExtractionResponse) -> dict[str, list[str]]:
@@ -117,8 +123,9 @@ def _synthesize(
         + "\n".join(context_lines)
     )
 
+    model = (settings.llm_model or settings.openai_model or "gpt-4o").strip()
     completion = client.beta.chat.completions.parse(
-        model=settings.openai_model,
+        model=model,
         messages=[
             {"role": "system", "content": prompt},
             {"role": "user", "content": "Synthesize all findings into a CrawlResponse."},

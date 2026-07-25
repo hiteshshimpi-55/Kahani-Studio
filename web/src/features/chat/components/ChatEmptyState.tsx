@@ -2,12 +2,14 @@ import { useEffect, useRef, useState } from 'react'
 
 import heroIllustration from '@/assets/ai-story-hero.svg'
 
+import { BrandMark } from '@/components/brand/BrandMark'
+
 import { ChatComposer } from './ChatComposer'
 
 const PROMPTS = [
-  'Write a 4-part Hindi thriller about a midnight house',
-  'Pocket FM serial: rivals fall in love at a radio station',
-  'Short horror: something knocks from inside the well',
+  'I have a rough story idea, not sure where to start',
+  'Something tense people would listen to on the commute',
+  'Turn this into an audio serial somehow',
 ]
 
 const HEADLINES = [
@@ -73,6 +75,7 @@ export function ChatEmptyState({ onSend, onAttach, onStop, isStreaming, initialP
   return (
     <div className="chat-atmosphere relative flex h-full min-h-0 flex-col">
       <div className="relative z-[1] flex flex-1 flex-col items-center justify-center px-4 pb-8">
+        <BrandMark size={56} className="mb-5 rounded-[12px] shadow-[var(--shadow-card)]" />
         <h1 className="chat-typewriter-headline" aria-live="polite">
           <span className="chat-typewriter-line">{display || '\u00a0'}</span>
         </h1>

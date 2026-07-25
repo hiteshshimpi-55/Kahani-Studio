@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 
@@ -10,8 +12,31 @@ class StartRunRequest(BaseModel):
     prompt: str = Field(min_length=1)
     session_id: str | None = None
     narration_config: dict | None = None
-    part_count: int | None = Field(default=None, ge=1, le=12)
-    total_duration_sec: int | None = Field(default=None, ge=30, le=1200)
+    # Part-by-part: one episode per run (part_count kept for API compat; ignored → 1)
+    part_count: int | None = Field(default=1, ge=1, le=12)
+    total_duration_sec: int | None = Field(default=90, ge=30, le=180)
+    part_number: int | None = Field(default=None, ge=1, le=99)
+
+
+class UpdateCharacterRequest(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=255)
+    role: str | None = None
+    voice: str | None = None
+    speech_patterns: str | None = None
+    arc: str | None = None
+
+
+class CreateCharacterRequest(BaseModel):
+    character_key: str = Field(min_length=1, max_length=128)
+    name: str = Field(min_length=1, max_length=255)
+    role: str | None = None
+    voice: str | None = None
+    speech_patterns: str | None = None
+    arc: str | None = None
+
+
+class PinScriptRequest(BaseModel):
+    pinned: bool = True
 
 
 class UpdateScriptRequest(BaseModel):
@@ -37,3 +62,8 @@ class GenerateScriptAudioRequest(BaseModel):
 class ChatMessageRequest(BaseModel):
     message: str = Field(min_length=1)
     session_id: str | None = None
+
+
+class RejectStageRequest(BaseModel):
+    action: Literal["regenerate", "revise"] = Field(description="regenerate | revise")
+    notes: str | None = Field(default=None, max_length=4000)

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from collections.abc import AsyncIterator, Iterator
 
 from elevenlabs import VoiceSettings
@@ -8,6 +9,8 @@ from elevenlabs.client import AsyncElevenLabs, ElevenLabs
 from app.errors.constants import ERROR_CODE_TTS_FAILED, ERROR_MSG_TTS_FAILED
 from app.errors.exceptions import AppError
 from app.integrations.elevenlabs.types import TtsConvertRequest, TtsConvertResult, VoiceSettingsParams
+
+log = logging.getLogger(__name__)
 
 
 def _to_voice_settings(params: VoiceSettingsParams | None) -> VoiceSettings | None:
@@ -32,7 +35,18 @@ def _to_voice_settings(params: VoiceSettingsParams | None) -> VoiceSettings | No
 def _collect_chunks(chunks: Iterator[bytes] | bytes) -> bytes:
     if isinstance(chunks, (bytes, bytearray)):
         return bytes(chunks)
-    return b"".join(chunk for chunk in chunks if chunk)
+    parts: list[bytes] = []
+    for chunk in chunks:
+        if not chunk:
+            continue
+        if isinstance(chunk, (bytes, bytearray)):
+            parts.append(bytes(chunk))
+        else:
+            try:
+                parts.append(bytes(chunk))
+            except Exception:
+                log.warning("elevenlabs_skip_non_bytes_chunk type=%s", type(chunk))
+    return b"".join(parts)
 
 
 async def _acollect_chunks(chunks: AsyncIterator[bytes] | bytes) -> bytes:
@@ -68,6 +82,12 @@ def convert_text_to_speech(
     except AppError:
         raise
     except Exception as exc:
+        log.exception(
+            "elevenlabs_tts_failed voice_id=%s model_id=%s chars=%d",
+            request.voice_id,
+            request.model_id,
+            len(request.text or ""),
+        )
         raise AppError(
             code=ERROR_CODE_TTS_FAILED,
             message=ERROR_MSG_TTS_FAILED,
@@ -76,12 +96,38 @@ def convert_text_to_speech(
         ) from exc
 
     if not audio:
-        raise AppError(
-            code=ERROR_CODE_TTS_FAILED,
-            message=ERROR_MSG_TTS_FAILED,
-            http_status_code=502,
-            details=["empty audio response"],
-        )
+        # Retry once with plain text (strip [tags] / *emphasis*) — v3 often
+        # returns empty bytes for markdown-wrapped onomatopoeia.
+        plain = _plain_tts_text(request.text)
+        if plain and plain != request.text:
+            log.warning(
+                "elevenlabs_empty_retry voice_id=%s plain_chars=%d",
+                request.voice_id,
+                len(plain),
+            )
+            try:
+                raw_retry = client.text_to_speech.convert(
+                    voice_id=request.voice_id,
+                    text=plain,
+                    model_id=request.model_id,
+                    output_format=request.output_format,
+                    language_code=request.language_code,
+                    voice_settings=_to_voice_settings(request.voice_settings),
+                )
+                audio = _collect_chunks(raw_retry)
+            except Exception:
+                log.exception("elevenlabs_empty_retry_failed")
+        if not audio:
+            raise AppError(
+                code=ERROR_CODE_TTS_FAILED,
+                message=ERROR_MSG_TTS_FAILED,
+                http_status_code=502,
+                details=[
+                    "empty audio response",
+                    f"voice_id={request.voice_id}",
+                    f"text={request.text[:120]!r}",
+                ],
+            )
 
     return TtsConvertResult(
         audio=audio,
@@ -90,6 +136,17 @@ def convert_text_to_speech(
         output_format=request.output_format,
         character_count=len(request.text),
     )
+
+
+def _plain_tts_text(text: str) -> str:
+    """Strip v3 [direction] tags and markdown asterisks for a safe retry."""
+    import re
+
+    t = (text or "").strip()
+    t = re.sub(r"^\[[^\]]+\]\s*", "", t)
+    t = re.sub(r"^\*+([^*]+)\*+$", r"\1", t)
+    t = re.sub(r"\*([^*]+)\*", r"\1", t)
+    return t.strip()
 
 
 async def aconvert_text_to_speech(
@@ -115,6 +172,12 @@ async def aconvert_text_to_speech(
     except AppError:
         raise
     except Exception as exc:
+        log.exception(
+            "elevenlabs_tts_failed voice_id=%s model_id=%s chars=%d",
+            request.voice_id,
+            request.model_id,
+            len(request.text or ""),
+        )
         raise AppError(
             code=ERROR_CODE_TTS_FAILED,
             message=ERROR_MSG_TTS_FAILED,

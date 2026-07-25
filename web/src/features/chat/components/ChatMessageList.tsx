@@ -3,7 +3,7 @@ import { useEffect, useRef } from 'react'
 import type { ChatMessage, PlotPitch } from '../types'
 import { ChatActivityLine } from './ChatActivityLine'
 import { PlotPitchCards } from './PlotPitchCards'
-import { ScriptResultCard } from './ScriptResultCard'
+import { ProductionCard } from './ProductionCard'
 import { StreamingText } from './StreamingText'
 
 export function ChatMessageList({
@@ -13,6 +13,7 @@ export function ChatMessageList({
   onSaveDraft,
   onUpdateDraft,
   onPickPlot,
+  onContinueEpisode,
 }: {
   messages: ChatMessage[]
   projectId: string
@@ -20,6 +21,7 @@ export function ChatMessageList({
   onSaveDraft?: (runId: string, messageId: string, text?: string) => void | Promise<{ id: string } | void>
   onUpdateDraft?: (scriptId: string, messageId: string, text: string) => void | Promise<void>
   onPickPlot?: (pitch: PlotPitch) => void
+  onContinueEpisode?: (message: ChatMessage) => void
 }) {
   const bottomRef = useRef<HTMLDivElement>(null)
 
@@ -78,16 +80,18 @@ export function ChatMessageList({
                   {message.plotPitches && message.plotPitches.length > 0 ? (
                     <PlotPitchCards
                       pitches={message.plotPitches}
+                      research={message.pitchResearch}
                       disabled={streaming}
                       onPick={(pitch) => onPickPlot?.(pitch)}
                     />
                   ) : null}
                   {message.scriptPreview ? (
-                    <ScriptResultCard
+                    <ProductionCard
                       projectId={projectId}
                       scriptId={message.scriptId}
                       runId={message.runId}
                       preview={message.scriptPreview}
+                      package={message.scriptPackage}
                       isDraft={message.isDraft}
                       onSaveDraft={
                         message.runId && onSaveDraft
@@ -97,6 +101,11 @@ export function ChatMessageList({
                       onUpdateDraft={
                         message.scriptId && onUpdateDraft
                           ? (text) => onUpdateDraft(message.scriptId!, message.id, text)
+                          : undefined
+                      }
+                      onContinue={
+                        !streaming && onContinueEpisode
+                          ? () => onContinueEpisode(message)
                           : undefined
                       }
                     />

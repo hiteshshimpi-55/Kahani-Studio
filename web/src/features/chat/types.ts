@@ -21,11 +21,38 @@ export type PlotPitch = {
   tone: string
 }
 
+export type PitchResearchMeta = {
+  extraction?: boolean
+  tavily?: boolean
+  topic?: string | null
+  similar_works?: number
+  sources?: number
+}
+
 export type AgentToolStep = {
   id: string
   label: string
   detail?: string
   status: 'pending' | 'running' | 'done' | 'error'
+}
+
+export type ScriptPackagePreview = {
+  title?: string
+  bible?: {
+    characters?: Array<{
+      id?: string
+      name?: string
+      role?: string
+      voice?: string
+      speech_patterns?: string
+      arc?: string
+    }>
+  }
+  parts?: Array<{
+    part_number?: number
+    title?: string
+    cliff_out?: string
+  }>
 }
 
 export type ChatMessage = {
@@ -35,11 +62,13 @@ export type ChatMessage = {
   createdAt: number
   activity?: ChatActivity | null
   scriptPreview?: string
+  scriptPackage?: ScriptPackagePreview | null
   scriptId?: string
   runId?: string
   isDraft?: boolean
   questions?: string[]
   plotPitches?: PlotPitch[]
+  pitchResearch?: PitchResearchMeta | null
   kind?: 'user' | 'reply' | 'discover' | 'clarify' | 'generating' | 'script' | 'stopped' | 'context'
   status?: 'streaming' | 'complete' | 'error' | 'stopped'
   action?: ChatAction

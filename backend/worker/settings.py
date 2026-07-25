@@ -4,9 +4,14 @@ from app.core.config import settings
 from app.schemas.tts.request import SynthesizeSpeechRequest
 from app.services.tts.service import TtsService
 from app.workers.jobs import (
+    assemble_episode_job,
     delete_attachment_index_job,
+    generate_cover_art_job,
+    generate_run_audio_job,
     index_attachment_job,
     project_run_job,
+    project_run_visuals_job,
+    script_audio_job,
 )
 
 
@@ -177,7 +182,52 @@ async def visual_episode_job(ctx: dict, payload: dict) -> dict:
 
 
 async def on_startup(ctx: dict) -> None:
+    from sqlalchemy import text
+
     from app.agents.graph.checkpointer import init_checkpointer
+    from app.core.db.session import engine
+
+    # Ensure production-stage columns exist (same alters as API lifespan)
+    try:
+        async with engine.begin() as conn:
+            await conn.execute(
+                text(
+                    "ALTER TABLE project_runs "
+                    "ADD COLUMN IF NOT EXISTS current_stage VARCHAR(32)"
+                )
+            )
+            await conn.execute(
+                text(
+                    "ALTER TABLE project_runs "
+                    "ADD COLUMN IF NOT EXISTS stage_statuses JSONB"
+                )
+            )
+            await conn.execute(
+                text(
+                    "ALTER TABLE project_runs "
+                    "ADD COLUMN IF NOT EXISTS audio_s3_key VARCHAR(1024)"
+                )
+            )
+            await conn.execute(
+                text(
+                    "ALTER TABLE project_runs "
+                    "ADD COLUMN IF NOT EXISTS cover_s3_key VARCHAR(1024)"
+                )
+            )
+            await conn.execute(
+                text(
+                    "ALTER TABLE project_runs "
+                    "ADD COLUMN IF NOT EXISTS manifest_s3_key VARCHAR(1024)"
+                )
+            )
+            await conn.execute(
+                text(
+                    "ALTER TABLE project_runs "
+                    "ADD COLUMN IF NOT EXISTS revision_notes TEXT"
+                )
+            )
+    except Exception:
+        pass
 
     await init_checkpointer()
 
@@ -195,6 +245,11 @@ class WorkerSettings:
         index_attachment_job,
         delete_attachment_index_job,
         project_run_job,
+        script_audio_job,
+        generate_run_audio_job,
+        generate_cover_art_job,
+        assemble_episode_job,
+        project_run_visuals_job,
         tts_synthesize_job,
         visual_characters_job,
         visual_episode_job,
