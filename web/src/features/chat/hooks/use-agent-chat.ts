@@ -11,7 +11,7 @@ import {
   type ChatMessage,
 } from '../types'
 
-function uid() {
+function uid(): string {
   return crypto.randomUUID()
 }
 
@@ -320,11 +320,13 @@ export function useAgentChat(projectId: string | undefined) {
       activeAssistantRef.current = assistantId
 
       let content = ''
-      let finalId = assistantId
+      let finalId: string = assistantId
       let runId: string | undefined
       let kind: ChatMessage['kind'] = 'reply'
       let action: ChatMessage['action']
       let questions: string[] = []
+      // Mutated inside onEvent; TS CFA does not see those writes after await.
+      let shouldPollGeneration = false
 
       try {
         await streamChatMessage(projectId, text.trim(), activeSessionRef.current ?? undefined, {
@@ -355,6 +357,7 @@ export function useAgentChat(projectId: string | undefined) {
               finalId = evt.id
               runId = evt.run_id
               kind = 'generating'
+              shouldPollGeneration = true
               action = evt.action as ChatMessage['action']
               content = evt.content
               setMessages((prev) =>
@@ -370,12 +373,13 @@ export function useAgentChat(projectId: string | undefined) {
               questions = evt.questions ?? []
               runId = evt.run_id
               action = evt.action as ChatMessage['action']
+              shouldPollGeneration = evt.kind === 'generating' && Boolean(evt.run_id)
               if (evt.session_id) setActiveSessionId(evt.session_id)
             }
           },
         })
 
-        if (runId && kind === 'generating') {
+        if (runId && shouldPollGeneration) {
           updateAssistant(finalId, {
             content,
             kind: 'generating',

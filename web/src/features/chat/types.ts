@@ -14,6 +14,13 @@ export type ChatActivity = {
 
 export type ChatAction = 'chat' | 'clarify' | 'generate' | 'rewrite' | 'context_note'
 
+export type AgentToolStep = {
+  id: string
+  label: string
+  detail?: string
+  status: 'pending' | 'running' | 'done' | 'error'
+}
+
 export type ChatMessage = {
   id: string
   role: 'user' | 'assistant'
