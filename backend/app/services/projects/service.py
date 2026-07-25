@@ -43,7 +43,7 @@ from app.schemas.projects.response import (
 )
 from app.services.chat.checkpoint_history import build_session_chat_history
 from app.services.chat.orchestrator import analyze_user_message
-from app.integrations.s3 import get_artifact_storage
+from app.integrations.s3.storage import get_artifact_storage
 from app.services.projects.audio import (
     audio_file_path,
     read_audio_status,
