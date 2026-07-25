@@ -41,8 +41,9 @@ from app.schemas.projects.response import (
 )
 from app.services.chat.checkpoint_history import build_session_chat_history
 from app.services.chat.orchestrator import analyze_user_message
+from app.integrations.s3 import get_artifact_storage
 from app.services.projects.storage import (
-    attachment_storage_path,
+    attachment_object_key,
     checksum_bytes,
     is_allowed_filename,
     read_run_package,
@@ -172,9 +173,13 @@ class ProjectsService:
             index_status="pending",
         )
         attachment = await self._attachments.create(attachment)
-        path = attachment_storage_path(project_id, attachment.id, filename)
-        path.write_bytes(data)
-        attachment.storage_path = str(path)
+        key = attachment_object_key(project_id, attachment.id, filename)
+        get_artifact_storage().put_bytes(
+            key,
+            data,
+            content_type=file.content_type or "text/plain",
+        )
+        attachment.storage_path = key
         await self._session.flush()
         await self._session.refresh(attachment)
 
@@ -196,7 +201,6 @@ class ProjectsService:
         if not row or row.project_id != project_id:
             raise AppError(code="NOT_FOUND", message="Attachment not found", http_status_code=404)
 
-        path = Path(row.storage_path)
         if self._redis is not None:
             try:
                 await self._redis.enqueue_job(
@@ -207,8 +211,11 @@ class ProjectsService:
             except Exception:
                 logger.exception("Failed to enqueue delete_attachment_index_job")
 
-        if path.exists():
-            path.unlink()
+        if row.storage_path:
+            try:
+                get_artifact_storage().delete(row.storage_path)
+            except Exception:
+                logger.exception("Failed to delete attachment object %s", row.storage_path)
         await self._attachments.delete(row)
 
     async def start_run(self, project_id: str, body: StartRunRequest) -> RunResponse:

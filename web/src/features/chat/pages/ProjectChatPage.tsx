@@ -5,6 +5,7 @@ import { KissaLoader } from '@/components/ui/kissa-loader'
 import { useProject } from '@/features/projects/hooks/use-project'
 import { NotFoundView } from '@/features/system/pages/NotFoundPage'
 
+import type { PlotPitch } from '../types'
 import { ChatComposer } from '../components/ChatComposer'
 import { ChatEmptyState } from '../components/ChatEmptyState'
 import { ChatMessageList } from '../components/ChatMessageList'
@@ -31,6 +32,10 @@ export function ProjectChatPage() {
   } = useAgentChat(projectId)
   const [uploading, setUploading] = useState(false)
   const empty = !hydrating && messages.length === 0
+
+  const handlePickPlot = (pitch: PlotPitch) => {
+    void send(`Let's go with "${pitch.title}" — ${pitch.logline}`)
+  }
 
   if (loading || hydrating) {
     return (
@@ -80,6 +85,7 @@ export function ProjectChatPage() {
                 streaming={streaming}
                 onSaveDraft={saveDraft}
                 onUpdateDraft={updateDraft}
+                onPickPlot={handlePickPlot}
               />
             </div>
             <div className="relative z-10 mx-auto w-full max-w-[760px] shrink-0 bg-gradient-to-t from-[var(--surface-2)] via-[var(--surface-2)] to-transparent px-4 pt-5 pb-4 md:px-6">

@@ -1,5 +1,7 @@
 import { Link, useParams } from 'react-router-dom'
 
+import { AddAssetMenu } from '@/components/AddAssetMenu'
+import { ListingShell, PageHeader } from '@/components/layout/PageHeader'
 import { KissaLoader } from '@/components/ui/kissa-loader'
 import { ContextAttachmentsPanel } from '@/features/projects/components/ContextAttachmentsPanel'
 import { useAttachments } from '@/features/projects/hooks/use-attachments'
@@ -28,18 +30,33 @@ export function ProjectContextPage() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl">
-      <div className="mb-6">
-        <p className="text-[12px] text-[var(--text-secondary)]">
+    <ListingShell maxWidth="3xl">
+      <PageHeader
+        title="Context"
+        description="Add briefs the agent should know. Files here ground every Generate in chat."
+        breadcrumb={
           <Link to={`/projects/${project.id}/chat`} className="hover:text-[var(--brand)]">
             {project.name}
           </Link>
-        </p>
-        <h1 className="mt-1 text-[22px] font-semibold tracking-tight">Context</h1>
-        <p className="mt-1 text-[13px] text-[var(--text-secondary)]">
-          Add briefs the agent should know. Files here ground every Generate in chat.
-        </p>
-      </div>
+        }
+        actions={
+          <AddAssetMenu
+            loading={attachments.uploading}
+            actions={[
+              {
+                kind: 'context',
+                label: 'Add context',
+                accept: '.md,.txt,.markdown,text/plain,text/markdown',
+                multiple: true,
+                hint: '.md or .txt for RAG',
+                onFiles: async (files) => {
+                  await attachments.upload(files)
+                },
+              },
+            ]}
+          />
+        }
+      />
       <ContextAttachmentsPanel
         attachments={attachments.attachments}
         loading={attachments.loading}
@@ -47,7 +64,8 @@ export function ProjectContextPage() {
         error={attachments.error}
         onUpload={attachments.upload}
         onDelete={attachments.remove}
+        showDropzone={false}
       />
-    </div>
+    </ListingShell>
   )
 }

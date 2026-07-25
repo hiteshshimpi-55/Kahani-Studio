@@ -4,6 +4,7 @@ import * as projectsApi from '@/features/projects/api/projects-api'
 import type { ChatSession, ProjectAttachment } from '@/features/projects/types'
 
 import { streamChatMessage } from '../lib/chat-stream'
+import type { PlotPitch } from '../lib/chat-stream'
 import {
   REWRITE_PHRASES,
   WRITING_PHRASES,
@@ -83,19 +84,21 @@ function historyToMessages(
       }
     }
 
-    return {
+    const msg: ChatMessage = {
       id: item.id,
       role: 'assistant' as const,
       content: item.content,
       createdAt,
       kind: (item.kind as ChatMessage['kind']) || 'reply',
       questions: item.questions,
+      plotPitches: item.plot_pitches ?? undefined,
       runId: item.run_id ?? undefined,
       scriptPreview: item.script_preview ?? undefined,
       scriptId: item.draft_script_id ?? undefined,
       isDraft: Boolean(item.is_draft),
       status: 'complete' as const,
     }
+    return msg
   })
 }
 
@@ -175,7 +178,7 @@ export function useAgentChat(projectId: string | undefined) {
               updateAssistant(assistantId, {
                 activity: null,
                 content:
-                  'Script Writer finished. Review the screenplay below — save it as a draft when you’re happy with it.',
+                  'Your script is ready. Review it below — save as a draft when you want to keep it.',
                 scriptPreview: preview || 'Script generated successfully.',
                 scriptId: next.draft_script_id ?? undefined,
                 isDraft: Boolean(next.is_draft),
@@ -328,6 +331,14 @@ export function useAgentChat(projectId: string | undefined) {
       // Mutated inside onEvent; TS CFA does not see those writes after await.
       let shouldPollGeneration = false
 
+      const patchStreaming = (patch: Partial<ChatMessage>) => {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === assistantId || m.id === finalId ? { ...m, ...patch } : m,
+          ),
+        )
+      }
+
       try {
         await streamChatMessage(projectId, text.trim(), activeSessionRef.current ?? undefined, {
           signal: controller.signal,
@@ -339,18 +350,27 @@ export function useAgentChat(projectId: string | undefined) {
               return
             }
             if (evt.type === 'status') {
-              updateAssistant(assistantId, {
+              // Don't flash status over an in-progress typewriter.
+              // Writing/rewriting status after run_started is allowed (runId set).
+              if (content.length > 0 && !runId) return
+              patchStreaming({
                 activity: {
                   phase: evt.phase as ChatActivity['phase'],
                   label: evt.label,
                 },
-                action: evt.action as ChatMessage['action'],
+                action: (evt.action as ChatMessage['action']) ?? action,
               })
+              if (evt.action) action = evt.action as ChatMessage['action']
               return
             }
             if (evt.type === 'text_delta') {
               content += evt.delta
-              updateAssistant(assistantId, { content })
+              patchStreaming({ content, activity: null })
+              return
+            }
+            if (evt.type === 'plot_pitches') {
+              const pitches = (evt as { type: 'plot_pitches'; pitches: PlotPitch[] }).pitches
+              patchStreaming({ plotPitches: pitches })
               return
             }
             if (evt.type === 'run_started') {
@@ -360,9 +380,7 @@ export function useAgentChat(projectId: string | undefined) {
               shouldPollGeneration = true
               action = evt.action as ChatMessage['action']
               content = evt.content
-              setMessages((prev) =>
-                prev.map((m) => (m.id === assistantId ? { ...m, id: finalId, runId, kind } : m)),
-              )
+              patchStreaming({ id: finalId, runId, kind, content, action })
               activeAssistantRef.current = finalId
               return
             }
@@ -375,6 +393,19 @@ export function useAgentChat(projectId: string | undefined) {
               action = evt.action as ChatMessage['action']
               shouldPollGeneration = evt.kind === 'generating' && Boolean(evt.run_id)
               if (evt.session_id) setActiveSessionId(evt.session_id)
+              const donePitches = (evt as { plot_pitches?: PlotPitch[] }).plot_pitches
+              patchStreaming({
+                id: finalId,
+                content,
+                kind,
+                questions,
+                runId,
+                action,
+                plotPitches: donePitches ?? undefined,
+                activity: shouldPollGeneration ? undefined : null,
+                status: shouldPollGeneration ? 'streaming' : 'complete',
+              })
+              activeAssistantRef.current = finalId
             }
           },
         })

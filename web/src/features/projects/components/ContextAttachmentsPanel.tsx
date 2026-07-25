@@ -26,6 +26,8 @@ interface Props {
   error: string | null
   onUpload: (files: FileList | File[]) => Promise<void>
   onDelete: (id: string) => Promise<void>
+  /** When false, upload only via page + Add CTA */
+  showDropzone?: boolean
 }
 
 const ACCEPT = '.md,.txt,.markdown,text/plain,text/markdown'
@@ -37,6 +39,7 @@ export function ContextAttachmentsPanel({
   error,
   onUpload,
   onDelete,
+  showDropzone = true,
 }: Props) {
   const [dragging, setDragging] = useState(false)
 
@@ -53,54 +56,58 @@ export function ContextAttachmentsPanel({
 
   return (
     <section className="rounded-[10px] border border-[var(--folio-border)] bg-[var(--surface-2)] p-5">
-      <div className="mb-4">
-        <h2 className="text-[14px] font-semibold text-[var(--text-primary)]">Context</h2>
-        <p className="mt-1 text-[13px] text-[var(--text-secondary)]">
-          Add briefs the agent should know.
-        </p>
-      </div>
+      {showDropzone ? (
+        <>
+          <div className="mb-4">
+            <h2 className="text-[14px] font-semibold text-[var(--text-primary)]">Context</h2>
+            <p className="mt-1 text-[13px] text-[var(--text-secondary)]">
+              Add briefs the agent should know.
+            </p>
+          </div>
 
-      <label
-        onDragOver={(e) => {
-          e.preventDefault()
-          setDragging(true)
-        }}
-        onDragLeave={() => setDragging(false)}
-        onDrop={onDrop}
-        className={cn(
-          'flex cursor-pointer flex-col items-center justify-center rounded-[8px] border border-dashed px-4 py-8 text-center transition-colors',
-          dragging
-            ? 'border-[var(--brand)] bg-[var(--brand)]/5'
-            : 'border-[var(--folio-border)] bg-[var(--surface-0)] hover:bg-[var(--surface-1)]',
-        )}
-      >
-        <input
-          type="file"
-          className="sr-only"
-          accept={ACCEPT}
-          multiple
-          disabled={uploading}
-          onChange={(e) => {
-            if (e.target.files?.length) void onUpload(e.target.files)
-            e.target.value = ''
-          }}
-        />
-        <Upload className="mb-2 h-4 w-4 stroke-[1.75] text-[var(--text-secondary)]" />
-        <p className="text-[13px] font-medium text-[var(--text-primary)]">
-          {uploading ? 'Uploading…' : 'Drop files or click to upload'}
-        </p>
-        <p className="mt-1 text-[11px] text-[var(--text-secondary)]">.md, .txt, .markdown</p>
-      </label>
+          <label
+            onDragOver={(e) => {
+              e.preventDefault()
+              setDragging(true)
+            }}
+            onDragLeave={() => setDragging(false)}
+            onDrop={onDrop}
+            className={cn(
+              'flex cursor-pointer flex-col items-center justify-center rounded-[8px] border border-dashed px-4 py-8 text-center transition-colors',
+              dragging
+                ? 'border-[var(--brand)] bg-[var(--brand)]/5'
+                : 'border-[var(--folio-border)] bg-[var(--surface-0)] hover:bg-[var(--surface-1)]',
+            )}
+          >
+            <input
+              type="file"
+              className="sr-only"
+              accept={ACCEPT}
+              multiple
+              disabled={uploading}
+              onChange={(e) => {
+                if (e.target.files?.length) void onUpload(e.target.files)
+                e.target.value = ''
+              }}
+            />
+            <Upload className="mb-2 h-4 w-4 stroke-[1.75] text-[var(--text-secondary)]" />
+            <p className="text-[13px] font-medium text-[var(--text-primary)]">
+              {uploading ? 'Uploading…' : 'Drop files or click to upload'}
+            </p>
+            <p className="mt-1 text-[11px] text-[var(--text-secondary)]">.md, .txt, .markdown</p>
+          </label>
+        </>
+      ) : null}
 
-      {error ? <p className="mt-3 text-[13px] text-destructive">{error}</p> : null}
+      {error ? <p className={cn('text-[13px] text-destructive', showDropzone && 'mt-3')}>{error}</p> : null}
 
-      <div className="mt-4 space-y-2">
+      <div className={cn('space-y-2', (showDropzone || error) && 'mt-4')}>
         {loading && attachments.length === 0 ? (
           <p className="text-[13px] text-[var(--text-secondary)]">Loading…</p>
         ) : null}
         {!loading && attachments.length === 0 ? (
           <p className="text-[13px] text-[var(--text-secondary)]">
-            Upload briefs, research, or source notes to ground generation.
+            Use + Add to upload briefs, research, or source notes.
           </p>
         ) : null}
         {attachments.map((a) => (

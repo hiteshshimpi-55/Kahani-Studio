@@ -118,7 +118,7 @@ export function AppShell() {
           <nav className="space-y-0.5">
             <SidebarProjects collapsed={collapsed} />
             <SidebarLink to="/editor" label="Editor" icon={PenLine} collapsed={collapsed} />
-            <SidebarLink to="/voices" label="Voice & SFX" icon={Mic2} collapsed={collapsed} />
+            <SidebarLink to="/library" label="Library" icon={Mic2} collapsed={collapsed} />
             <SidebarLink to="/audience" label="Audience Sim" icon={Users} collapsed={collapsed} />
             <SidebarLink
               to="/system"

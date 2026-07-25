@@ -1,7 +1,8 @@
 import { useEffect, useRef } from 'react'
 
-import type { ChatMessage } from '../types'
+import type { ChatMessage, PlotPitch } from '../types'
 import { ChatActivityLine } from './ChatActivityLine'
+import { PlotPitchCards } from './PlotPitchCards'
 import { ScriptResultCard } from './ScriptResultCard'
 import { StreamingText } from './StreamingText'
 
@@ -11,12 +12,14 @@ export function ChatMessageList({
   streaming,
   onSaveDraft,
   onUpdateDraft,
+  onPickPlot,
 }: {
   messages: ChatMessage[]
   projectId: string
   streaming: boolean
   onSaveDraft?: (runId: string, messageId: string, text?: string) => void | Promise<void>
   onUpdateDraft?: (scriptId: string, messageId: string, text: string) => void | Promise<void>
+  onPickPlot?: (pitch: PlotPitch) => void
 }) {
   const bottomRef = useRef<HTMLDivElement>(null)
 
@@ -46,17 +49,37 @@ export function ChatMessageList({
                 <p className="whitespace-pre-wrap">{message.content}</p>
               ) : (
                 <>
-                  {isStreaming && message.activity ? (
+                  {isStreaming && message.activity && !message.content ? (
                     <ChatActivityLine activity={message.activity} />
                   ) : null}
                   {message.content ? (
-                    <StreamingText
-                      text={message.content}
-                      active={isStreaming && !message.scriptPreview}
-                    />
+                    <>
+                      <StreamingText
+                        text={message.content}
+                        active={
+                          isStreaming &&
+                          !message.scriptPreview &&
+                          !message.activity &&
+                          !message.plotPitches?.length
+                        }
+                      />
+                      {isStreaming && message.activity && message.kind === 'generating' ? (
+                        <ChatActivityLine
+                          activity={message.activity}
+                          className="mt-3"
+                        />
+                      ) : null}
+                    </>
                   ) : isStreaming && !message.activity ? (
                     <ChatActivityLine
                       activity={{ phase: 'thinking', label: 'Reading your message…' }}
+                    />
+                  ) : null}
+                  {message.plotPitches && message.plotPitches.length > 0 ? (
+                    <PlotPitchCards
+                      pitches={message.plotPitches}
+                      disabled={streaming}
+                      onPick={(pitch) => onPickPlot?.(pitch)}
                     />
                   ) : null}
                   {message.scriptPreview ? (

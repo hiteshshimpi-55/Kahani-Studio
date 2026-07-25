@@ -9,6 +9,7 @@ from pathlib import Path
 from app.agents.graph.graph import RunCancelled, run_project_graph_cancellable
 from app.core.db.session import AsyncSessionLocal
 from app.integrations.databricks_ai_search import AISearchClient
+from app.integrations.s3 import get_artifact_storage
 from app.repository.projects import AttachmentRepository, RunRepository
 from app.services.projects.chunking import chunk_text
 from app.services.projects.storage import runs_dir
@@ -23,7 +24,7 @@ async def index_attachment_job(ctx: dict, project_id: str, attachment_id: str) -
         if not row or row.project_id != project_id:
             return {"ok": False, "error": "attachment not found"}
         try:
-            text = Path(row.storage_path).read_text(encoding="utf-8", errors="ignore")
+            text = get_artifact_storage().get_text(row.storage_path)
             chunks = chunk_text(text)
             client = AISearchClient()
             client.upsert_chunks(

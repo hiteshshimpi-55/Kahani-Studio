@@ -130,6 +130,7 @@ export async function listChatMessages(
     created_at: string
     run_id?: string | null
     questions?: string[]
+    plot_pitches?: Array<{ title: string; logline: string; tone: string }>
     script_preview?: string | null
     draft_script_id?: string | null
     is_draft?: boolean

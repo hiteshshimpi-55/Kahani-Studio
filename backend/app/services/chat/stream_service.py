@@ -21,10 +21,10 @@ from app.repository.projects import (
     ProjectRepository,
     RunRepository,
 )
-from app.schemas.projects.request import ChatMessageRequest, StartRunRequest
-from app.services.chat.activity import ChatAction, phases_for_action, pick_phrase
-from app.services.chat.orchestrator import analyze_user_message
-from app.services.chat.sse import sse_event, stream_text_deltas
+from app.schemas.projects.request import ChatMessageRequest
+from app.services.chat.activity import ChatAction, ChatPhase, phases_for_action, pick_phrase
+from app.services.chat.orchestrator import analyze_user_message, generate_plot_pitches
+from app.services.chat.sse import paced_status, sse_event, stream_text_deltas
 
 logger = logging.getLogger(__name__)
 
@@ -36,20 +36,55 @@ DEFAULT_NARRATION = {
     "narrators": [{"id": "NARRATOR", "voice_notes": "calm thriller guide"}],
 }
 
+_PHASE_HOLD_MS = {
+    "thinking": 0,
+    "figuring": 700,
+    "context": 900,
+    "discovering": 0,  # real LLM latency fills this
+    "rewriting": 650,
+    "writing": 0,
+    "polishing": 500,
+}
+
 
 def _infer_action(analysis: dict[str, Any], user_message: str) -> ChatAction:
     explicit = analysis.get("action")
-    if explicit in ("chat", "clarify", "generate", "rewrite", "context_note"):
+    if explicit in ("chat", "discover", "generate", "rewrite", "context_note"):
         return explicit  # type: ignore[return-value]
     lower = user_message.lower()
     rewrite_hints = ("rewrite", "revise", "redo", "change the script", "update the draft", "fix the script")
     if any(h in lower for h in rewrite_hints):
         return "rewrite"
+    context_hints = ("also note", "for context", "remember that", "keep in mind", "add this")
+    if any(h in lower for h in context_hints) and "script" not in lower and "write" not in lower:
+        return "context_note"
+    if analysis.get("plot_pitches"):
+        return "discover"
     if analysis.get("intent") != "generate":
-        return "clarify" if analysis.get("needs_clarification") else "chat"
+        return "chat"
     if not analysis.get("enough_context"):
-        return "clarify"
+        return "discover"
     return "generate"
+
+
+def _soften_reply(reply: str, action: ChatAction) -> str:
+    text = (reply or "").strip()
+    banned = (
+        "source.md", "script writer", "discover context", "discovery",
+        "langgraph", "retrieve_context", "build_source",
+    )
+    lower = text.lower()
+    if any(b in lower for b in banned):
+        if action == "rewrite":
+            return "Got it — I'll rework the script with your notes."
+        if action == "generate":
+            return "Perfect — starting on your script now. I'll let you know when it's ready."
+        if action == "discover":
+            return "Here are some directions I'm excited about:"
+        if action == "context_note":
+            return "Noted — I'll keep that in mind for the next draft."
+        return text
+    return text
 
 
 class ChatStreamService:
@@ -75,6 +110,24 @@ class ChatStreamService:
             ChatSession(project_id=project_id, title="Session 1")
         )
 
+    async def _emit_phases(
+        self,
+        phases: list[ChatPhase],
+        *,
+        action: ChatAction,
+        seed: str,
+        skip_first: bool = True,
+    ) -> AsyncGenerator[dict[str, str], None]:
+        start = 1 if skip_first and phases else 0
+        for phase in phases[start:]:
+            async for evt in paced_status(
+                phase=phase,
+                label=pick_phrase(phase, seed=f"{seed}:{phase}"),
+                action=action,
+                hold_ms=_PHASE_HOLD_MS.get(phase, 600),
+            ):
+                yield evt
+
     async def stream_message(
         self, project_id: str, body: ChatMessageRequest
     ) -> AsyncGenerator[dict[str, str], None]:
@@ -98,13 +151,11 @@ class ChatStreamService:
 
         yield sse_event({"type": "start", "assistant_id": assistant_id, "session_id": session.id})
 
-        yield sse_event(
-            {
-                "type": "status",
-                "phase": "thinking",
-                "label": pick_phrase("thinking", seed=assistant_id),
-            }
-        )
+        async for evt in paced_status(
+            phase="thinking",
+            label=pick_phrase("thinking", seed=assistant_id),
+        ):
+            yield evt
 
         analysis = await analyze_user_message(
             user_message=message,
@@ -114,26 +165,66 @@ class ChatStreamService:
         action = _infer_action(analysis, message)
         phase_plan = phases_for_action(action, has_attachments=has_attachments)
 
-        for phase in phase_plan[1:]:
+        async for evt in self._emit_phases(phase_plan, action=action, seed=assistant_id):
+            yield evt
+
+        reply = _soften_reply(str(analysis.get("reply") or ""), action)
+
+        # ── Discover: pitch plots ─────────────────────────────────────────
+        if action == "discover":
+            pitches_from_analysis = analysis.get("plot_pitches")
+
+            if pitches_from_analysis and isinstance(pitches_from_analysis, list) and len(pitches_from_analysis) > 0:
+                pitches = pitches_from_analysis
+            else:
+                pitch_result = await generate_plot_pitches(
+                    user_message=message,
+                    history=history,
+                    attachment_count=len(attachments),
+                )
+                pitches = pitch_result.get("pitches", [])
+                if not reply or reply == "Here are some directions I'm excited about:":
+                    reply = pitch_result.get("reply", reply)
+
+            content = reply or "Here are 3 story directions — pick one and I'll start writing:"
+
+            async for evt in stream_text_deltas(content):
+                yield evt
+
+            yield sse_event({
+                "type": "plot_pitches",
+                "pitches": pitches,
+            })
+
+            _, persisted_id = await append_turn(
+                checkpointer,
+                session_id=session.id,
+                user_text=message,
+                assistant_text=content,
+                kind="discover",
+                questions=[],
+                analysis={**analysis, "action": action, "plot_pitches": pitches},
+            )
             yield sse_event(
                 {
-                    "type": "status",
-                    "phase": phase,
-                    "label": pick_phrase(phase, seed=f"{assistant_id}:{phase}"),
+                    "type": "done",
+                    "id": persisted_id,
+                    "kind": "discover",
+                    "content": content,
+                    "session_id": session.id,
                     "action": action,
+                    "plot_pitches": pitches,
+                    "created_at": now.isoformat(),
                 }
             )
+            return
 
-        questions = analysis.get("questions") or []
-        reply = str(analysis.get("reply") or "").strip()
-
-        if action in ("chat", "clarify"):
-            kind = "clarify" if action == "clarify" or questions else "reply"
-            if questions:
-                q_block = "\n".join(f"- {q}" for q in questions)
-                content = f"{reply}\n\n{q_block}".strip() if reply else q_block
-            else:
-                content = reply
+        # ── Lightweight turns: chat / context_note ────────────────────────
+        if action in ("chat", "context_note"):
+            kind = "reply"
+            content = reply or "How can I help with your story?"
+            if action == "context_note":
+                content = reply or "Noted — I'll keep that in mind when we write or revise."
 
             async for evt in stream_text_deltas(content):
                 yield evt
@@ -144,8 +235,8 @@ class ChatStreamService:
                 user_text=message,
                 assistant_text=content,
                 kind=kind,
-                questions=list(questions),
-                analysis=analysis,
+                questions=[],
+                analysis={**analysis, "action": action},
             )
             yield sse_event(
                 {
@@ -154,14 +245,13 @@ class ChatStreamService:
                     "kind": kind,
                     "content": content,
                     "session_id": session.id,
-                    "questions": list(questions),
                     "action": action,
                     "created_at": now.isoformat(),
                 }
             )
             return
 
-        # generate / rewrite — stream intro, then start worker run
+        # ── generate / rewrite — short intro, then worker run ─────────────
         if not reply:
             reply = (
                 "Starting on your script now — I'll let you know when it's ready."
@@ -174,7 +264,7 @@ class ChatStreamService:
             yield evt
 
         brief = str(analysis.get("generation_brief") or message).strip()
-        part_count = analysis.get("suggested_part_count") or 4
+        part_count = analysis.get("suggested_part_count") or 1
 
         run = ProjectRun(
             project_id=project_id,
@@ -182,13 +272,14 @@ class ChatStreamService:
             prompt=brief,
             status="queued",
             narration_config=DEFAULT_NARRATION,
-            part_count=int(part_count) if part_count else 4,
-            total_duration_sec=600,
+            part_count=int(part_count) if part_count else 1,
+            total_duration_sec=300,
         )
         run = await self._runs.create(run)
         await self._runs.update_status(
             run.id, status=run.status, langgraph_thread_id=run.id
         )
+        await self._session.commit()
 
         if self._redis is None:
             raise AppError(
@@ -203,6 +294,7 @@ class ChatStreamService:
         )
         job_id = getattr(job, "job_id", None) or str(job)
         await self._runs.update_status(run.id, status="queued", arq_job_id=job_id)
+        await self._session.commit()
 
         _, persisted_id = await append_turn(
             checkpointer,
@@ -215,6 +307,7 @@ class ChatStreamService:
             analysis={**analysis, "action": action},
         )
 
+        writing_phase: ChatPhase = "rewriting" if action == "rewrite" else "writing"
         yield sse_event(
             {
                 "type": "run_started",
@@ -228,7 +321,12 @@ class ChatStreamService:
             }
         )
 
-        yield sse_event({"type": "status", "phase": "writing", "label": pick_phrase("writing")})
+        async for evt in paced_status(
+            phase=writing_phase,
+            label=pick_phrase(writing_phase, seed=f"{assistant_id}:run"),
+            action=action,
+        ):
+            yield evt
 
         yield sse_event(
             {

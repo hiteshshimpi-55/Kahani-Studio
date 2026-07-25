@@ -9,44 +9,63 @@ ChatPhase = Literal[
     "thinking",
     "figuring",
     "context",
+    "discovering",
     "writing",
     "rewriting",
     "polishing",
 ]
 
-ChatAction = Literal["chat", "clarify", "generate", "rewrite", "context_note"]
+ChatAction = Literal["chat", "discover", "generate", "rewrite", "context_note"]
 
 PHRASES: dict[ChatPhase, list[str]] = {
     "thinking": [
         "Reading your message…",
         "Taking this in…",
         "One moment…",
+        "Hmm, let me see…",
+        "Got it — thinking…",
     ],
     "figuring": [
         "Figuring out what you need…",
         "Choosing the best next step…",
         "Mapping your request…",
+        "Weighing a few approaches…",
+        "Finding the right angle…",
     ],
     "context": [
-        "Pulling from your project context…",
-        "Scanning attached materials…",
-        "Checking what you've shared…",
+        "Glancing at what you've shared…",
+        "Pulling from your project notes…",
+        "Checking attached materials…",
+        "Connecting the dots from your context…",
+    ],
+    "discovering": [
+        "Exploring story directions…",
+        "Dreaming up plots…",
+        "Searching for the perfect hook…",
+        "Brewing some ideas…",
+        "Crafting plot pitches…",
     ],
     "writing": [
         "Writing your script…",
-        "Shaping dialogue and beats…",
-        "Drafting the audio screenplay…",
-        "Building the episode structure…",
+        "Shaping the opening beat…",
+        "Finding the right voice…",
+        "Drafting dialogue and turns…",
+        "Building the episode arc…",
+        "Letting the story breathe…",
+        "Threading the cliffhangers…",
     ],
     "rewriting": [
         "Reworking the script…",
         "Applying your notes…",
         "Revising the draft…",
+        "Tightening the beats…",
+        "Reshaping what you flagged…",
     ],
     "polishing": [
         "Putting finishing touches on it…",
         "Almost there…",
         "Wrapping up…",
+        "One last pass…",
     ],
 }
 
@@ -60,19 +79,17 @@ def pick_phrase(phase: ChatPhase, *, seed: str | None = None) -> str:
 
 
 def phases_for_action(action: ChatAction, *, has_attachments: bool) -> list[ChatPhase]:
-    """Which status phases to show — never expose raw graph node names."""
+    """Status phases shown *before* the reply typewriter."""
     if action == "context_note":
         return ["thinking"]
-    if action in ("chat", "clarify"):
-        phases: list[ChatPhase] = ["thinking", "figuring"]
-        if has_attachments:
-            phases.insert(1, "context")
-        return phases
+    if action == "chat":
+        return ["thinking"]
+    if action == "discover":
+        return ["thinking", "discovering"]
     if action == "rewrite":
-        return ["thinking", "figuring", "rewriting"]
+        return ["thinking", "rewriting"]
     # generate
-    phases = ["thinking", "figuring"]
+    phases: list[ChatPhase] = ["thinking", "figuring"]
     if has_attachments:
         phases.append("context")
-    phases.append("writing")
     return phases

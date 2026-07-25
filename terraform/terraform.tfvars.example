@@ -8,6 +8,7 @@ enable_https = false
 web_origins = [
   "https://uselamp.app",
   "https://www.uselamp.app",
+  "https://kahani-studio-three.vercel.app",
 ]
 
 # GitHub org/user + repo for Actions OIDC deploy role
