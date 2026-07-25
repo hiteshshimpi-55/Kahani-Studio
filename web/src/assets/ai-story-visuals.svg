@@ -1,0 +1,27 @@
+<svg width="720" height="480" viewBox="0 0 720 480" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="720" height="480" rx="36" fill="#111827"/>
+  <rect x="48" y="40" width="624" height="400" rx="30" fill="url(#panel)"/>
+  <rect x="120" y="100" width="208" height="260" rx="24" fill="#0F172A" fill-opacity="0.9" stroke="#F8FAFC" stroke-opacity="0.2"/>
+  <rect x="148" y="132" width="152" height="36" rx="12" fill="#F8FAFC" fill-opacity="0.14"/>
+  <rect x="148" y="186" width="122" height="12" rx="6" fill="#F8FAFC" fill-opacity="0.72"/>
+  <rect x="148" y="214" width="136" height="10" rx="5" fill="#F8FAFC" fill-opacity="0.38"/>
+  <rect x="148" y="240" width="94" height="10" rx="5" fill="#F8FAFC" fill-opacity="0.38"/>
+  <path d="M372 122C372 99.3563 390.356 81 413 81H500C522.644 81 541 99.3563 541 122V280C541 302.644 522.644 321 500 321H413C390.356 321 372 302.644 372 280V122Z" fill="#111827" fill-opacity="0.9" stroke="#F8FAFC" stroke-opacity="0.2"/>
+  <path d="M406 146H506" stroke="#F59E0B" stroke-width="12" stroke-linecap="round"/>
+  <path d="M406 182H484" stroke="#F8FAFC" stroke-opacity="0.42" stroke-width="10" stroke-linecap="round"/>
+  <path d="M406 214H466" stroke="#F8FAFC" stroke-opacity="0.3" stroke-width="10" stroke-linecap="round"/>
+  <circle cx="410" cy="264" r="24" fill="#7C3AED" fill-opacity="0.85"/>
+  <path d="M392 284H430" stroke="#F8FAFC" stroke-opacity="0.5" stroke-width="8" stroke-linecap="round"/>
+  <path d="M170 336C182 316 200 304 222 304C244 304 262 316 274 336" stroke="#F59E0B" stroke-width="12" stroke-linecap="round"/>
+  <circle cx="220" cy="288" r="12" fill="#F59E0B"/>
+  <circle cx="562" cy="136" r="10" fill="#F8FAFC" fill-opacity="0.85"/>
+  <circle cx="580" cy="176" r="7" fill="#7C3AED"/>
+  <path d="M544 336C544 314.461 561.461 297 583 297H596C617.539 297 635 314.461 635 336V344H544V336Z" fill="#0F172A" fill-opacity="0.88" stroke="#F8FAFC" stroke-opacity="0.2"/>
+  <rect x="558" y="320" width="58" height="10" rx="5" fill="#F8FAFC" fill-opacity="0.38"/>
+  <defs>
+    <linearGradient id="panel" x1="82" y1="58" x2="638" y2="425" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1E293B"/>
+      <stop offset="1" stop-color="#0F172A"/>
+    </linearGradient>
+  </defs>
+</svg>
