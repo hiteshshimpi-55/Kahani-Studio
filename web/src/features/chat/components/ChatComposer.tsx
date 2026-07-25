@@ -1,4 +1,4 @@
-import { ArrowUp, LoaderCircle, Square } from 'lucide-react'
+import { ArrowUp, Square } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react'
 
 import { AddAssetMenu } from '@/components/AddAssetMenu'

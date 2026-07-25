@@ -14,3 +14,6 @@ web_origins = [
 # GitHub org/user + repo for Actions OIDC deploy role
 github_org  = "YOUR_GITHUB_ORG_OR_USER"
 github_repo = "Kissa"
+
+# App runtime env (LLM / TTS / Databricks / keys) → Secrets Manager via:
+#   ./scripts/sync-app-secrets.sh

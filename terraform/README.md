@@ -85,17 +85,31 @@ First apply uses **HTTP on the ALB** (`enable_https = false`) so the stack comes
 
 ## Secrets
 
-Update the app secret (LLM / ElevenLabs):
+All app runtime env for api/worker comes from one Secrets Manager JSON secret
+(`…/app/secrets`). Sync from root `.env`:
 
 ```bash
-terraform output -raw app_secret_arn
-# Then in AWS Console → Secrets Manager, edit JSON keys:
-#   DATABASE_URL (already set)
-#   LLM_API_KEY
-#   ELEVENLABS_API_KEY
+./scripts/sync-app-secrets.sh
 ```
 
-Force new ECS deployments after secret changes.
+That copies every non-empty `KEY=value` from `.env` into the secret, except:
+
+- `VITE_*` (frontend build-time only)
+- Protected AWS infra keys (never overwritten by local Compose values):
+  `DATABASE_URL`, `REDIS_URL`, `ARTIFACTS_BUCKET`, `ALLOWED_ORIGINS`
+
+Force new ECS deployments after secret **or** task-definition changes:
+
+```bash
+aws ecs update-service --cluster $(terraform output -raw ecs_cluster_name) \
+  --service $(terraform output -raw ecs_service_api) \
+  --task-definition $(terraform output -raw api_task_definition_arn) \
+  --force-new-deployment
+aws ecs update-service --cluster $(terraform output -raw ecs_cluster_name) \
+  --service $(terraform output -raw ecs_service_worker) \
+  --task-definition $(terraform output -raw worker_task_definition_arn) \
+  --force-new-deployment
+```
 
 ## GitHub Actions
 
