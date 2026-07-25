@@ -1,108 +1,133 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import * as projectsApi from '@/features/projects/api/projects-api'
-import type { ProjectAttachment, ProjectRun } from '@/features/projects/types'
+import type { ChatSession, ProjectAttachment } from '@/features/projects/types'
 
-import { GRAPH_TOOL_STEPS, type AgentToolStep, type ChatMessage } from '../types'
+import { streamChatMessage } from '../lib/chat-stream'
+import {
+  REWRITE_PHRASES,
+  WRITING_PHRASES,
+  type ChatActivity,
+  type ChatMessage,
+} from '../types'
 
-function uid() {
+function uid(): string {
   return crypto.randomUUID()
 }
 
-function freshTools(): AgentToolStep[] {
-  return GRAPH_TOOL_STEPS.map((s) => ({ ...s, status: 'pending' as const }))
-}
+function historyToMessages(
+  items: Awaited<ReturnType<typeof projectsApi.listChatMessages>>,
+): ChatMessage[] {
+  return items.map((item) => {
+    const createdAt = new Date(item.created_at).getTime()
+    if (item.role === 'user') {
+      return {
+        id: item.id,
+        role: 'user' as const,
+        content: item.content,
+        createdAt,
+        kind: 'user' as const,
+        status: 'complete' as const,
+      }
+    }
 
-function advanceTools(tools: AgentToolStep[], upToIndex: number): AgentToolStep[] {
-  return tools.map((t, i) => {
-    if (i < upToIndex) return { ...t, status: 'done' }
-    if (i === upToIndex) return { ...t, status: 'running' }
-    return { ...t, status: 'pending' }
+    const runStatus = item.run_status
+    if (item.kind === 'generating' || runStatus === 'queued' || runStatus === 'running') {
+      if (runStatus === 'succeeded') {
+        return {
+          id: item.id,
+          role: 'assistant' as const,
+          content:
+            item.content ||
+            'Script is ready. Review it below — save as a draft when you want to keep it.',
+          createdAt,
+          kind: 'script' as const,
+          runId: item.run_id ?? undefined,
+          scriptPreview: item.script_preview ?? undefined,
+          scriptId: item.draft_script_id ?? undefined,
+          isDraft: Boolean(item.is_draft),
+          status: 'complete' as const,
+        }
+      }
+      if (runStatus === 'failed') {
+        return {
+          id: item.id,
+          role: 'assistant' as const,
+          content: item.content || 'Generation failed.',
+          createdAt,
+          kind: 'generating' as const,
+          runId: item.run_id ?? undefined,
+          status: 'error' as const,
+        }
+      }
+      if (runStatus === 'cancelled') {
+        return {
+          id: item.id,
+          role: 'assistant' as const,
+          content: 'Stopped. Tell me what to change, or ask me to continue.',
+          createdAt,
+          kind: 'stopped' as const,
+          runId: item.run_id ?? undefined,
+          status: 'stopped' as const,
+        }
+      }
+      return {
+        id: item.id,
+        role: 'assistant' as const,
+        content: item.content,
+        createdAt,
+        kind: 'generating' as const,
+        runId: item.run_id ?? undefined,
+        activity: { phase: 'writing', label: WRITING_PHRASES[0]! },
+        status: 'streaming' as const,
+      }
+    }
+
+    return {
+      id: item.id,
+      role: 'assistant' as const,
+      content: item.content,
+      createdAt,
+      kind: (item.kind as ChatMessage['kind']) || 'reply',
+      questions: item.questions,
+      runId: item.run_id ?? undefined,
+      scriptPreview: item.script_preview ?? undefined,
+      scriptId: item.draft_script_id ?? undefined,
+      isDraft: Boolean(item.is_draft),
+      status: 'complete' as const,
+    }
   })
-}
-
-function completeTools(tools: AgentToolStep[]): AgentToolStep[] {
-  return tools.map((t) => ({ ...t, status: 'done' }))
-}
-
-function runToMessages(run: ProjectRun): ChatMessage[] {
-  const createdAt = new Date(run.created_at).getTime()
-  const userMsg: ChatMessage = {
-    id: `user-${run.id}`,
-    role: 'user',
-    content: run.prompt,
-    createdAt,
-  }
-
-  if (run.status === 'queued' || run.status === 'running') {
-    return [
-      userMsg,
-      {
-        id: `assistant-${run.id}`,
-        role: 'assistant',
-        content: '',
-        createdAt: createdAt + 1,
-        tools: advanceTools(freshTools(), 1),
-        runId: run.id,
-        status: 'streaming',
-      },
-    ]
-  }
-
-  if (run.status === 'failed') {
-    return [
-      userMsg,
-      {
-        id: `assistant-${run.id}`,
-        role: 'assistant',
-        content: run.error || 'Generation failed.',
-        createdAt: createdAt + 1,
-        runId: run.id,
-        status: 'error',
-        tools: freshTools().map((t, i) =>
-          i < 2 ? { ...t, status: 'done' } : { ...t, status: i === 2 ? 'error' : 'pending' },
-        ),
-      },
-    ]
-  }
-
-  const preview = run.screenplay_md || run.screenplay_preview || ''
-  return [
-    userMsg,
-    {
-      id: `assistant-${run.id}`,
-      role: 'assistant',
-      content: run.is_draft
-        ? 'Script Writer finished. This output is saved as a draft — edit it here or open Drafts.'
-        : 'Script Writer finished. Review the output below, then add it as a draft when you’re ready.',
-      createdAt: createdAt + 1,
-      tools: completeTools(freshTools()),
-      runId: run.id,
-      scriptId: run.draft_script_id ?? undefined,
-      scriptPreview: preview || undefined,
-      isDraft: Boolean(run.is_draft),
-      status: 'complete',
-    },
-  ]
 }
 
 export function useAgentChat(projectId: string | undefined) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
+  const [sessions, setSessions] = useState<ChatSession[]>([])
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null)
   const [hydrating, setHydrating] = useState(true)
   const [streaming, setStreaming] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const pollRef = useRef<number | null>(null)
-  const stepTimerRef = useRef<number | null>(null)
+  const phraseRef = useRef<number | null>(null)
+  const abortRef = useRef<AbortController | null>(null)
+  const activeSessionRef = useRef<string | null>(null)
+  const activeRunRef = useRef<string | null>(null)
+  const activeAssistantRef = useRef<string | null>(null)
+
+  useEffect(() => {
+    activeSessionRef.current = activeSessionId
+  }, [activeSessionId])
 
   const clearTimers = useCallback(() => {
     if (pollRef.current) {
       window.clearInterval(pollRef.current)
       pollRef.current = null
     }
-    if (stepTimerRef.current) {
-      window.clearInterval(stepTimerRef.current)
-      stepTimerRef.current = null
+    if (phraseRef.current) {
+      window.clearInterval(phraseRef.current)
+      phraseRef.current = null
     }
+    abortRef.current?.abort()
+    abortRef.current = null
   }, [])
 
   const updateAssistant = useCallback((assistantId: string, patch: Partial<ChatMessage>) => {
@@ -111,10 +136,36 @@ export function useAgentChat(projectId: string | undefined) {
     )
   }, [])
 
+  const refreshSessions = useCallback(async () => {
+    if (!projectId) return []
+    const next = await projectsApi.listSessions(projectId)
+    setSessions(next)
+    return next
+  }, [projectId])
+
+  const startPhraseRotation = useCallback(
+    (assistantId: string, action?: ChatMessage['action']) => {
+      if (phraseRef.current) window.clearInterval(phraseRef.current)
+      const pool = action === 'rewrite' ? REWRITE_PHRASES : WRITING_PHRASES
+      let idx = 0
+      phraseRef.current = window.setInterval(() => {
+        idx = (idx + 1) % pool.length
+        updateAssistant(assistantId, {
+          activity: { phase: action === 'rewrite' ? 'rewriting' : 'writing', label: pool[idx]! },
+        })
+      }, 3200)
+    },
+    [updateAssistant],
+  )
+
   const pollUntilDone = useCallback(
-    (assistantId: string, runId: string) => {
+    (assistantId: string, runId: string, action?: ChatMessage['action']) => {
       if (!projectId) return Promise.resolve()
-      return new Promise<void>((resolve, reject) => {
+      activeRunRef.current = runId
+      activeAssistantRef.current = assistantId
+      startPhraseRotation(assistantId, action)
+
+      return new Promise<void>((resolve) => {
         pollRef.current = window.setInterval(async () => {
           try {
             const next = await projectsApi.getRun(projectId, runId)
@@ -122,29 +173,41 @@ export function useAgentChat(projectId: string | undefined) {
               clearTimers()
               const preview = next.screenplay_md || next.screenplay_preview || ''
               updateAssistant(assistantId, {
-                tools: completeTools(freshTools()),
-                content: next.is_draft
-                  ? 'Script Writer finished. This output is saved as a draft — edit it here or open Drafts.'
-                  : 'Script Writer finished. Review the output below, then add it as a draft when you’re ready.',
+                activity: null,
+                content:
+                  'Script Writer finished. Review the screenplay below — save it as a draft when you’re happy with it.',
                 scriptPreview: preview || 'Script generated successfully.',
                 scriptId: next.draft_script_id ?? undefined,
                 isDraft: Boolean(next.is_draft),
+                kind: 'script',
                 status: 'complete',
               })
+              activeRunRef.current = null
               setStreaming(false)
+              void refreshSessions()
               resolve()
             } else if (next.status === 'failed') {
               clearTimers()
               updateAssistant(assistantId, {
-                tools: freshTools().map((t, i) =>
-                  i < 2 ? { ...t, status: 'done' } : { ...t, status: i === 2 ? 'error' : 'pending' },
-                ),
+                activity: null,
                 content: next.error || 'Generation failed.',
                 status: 'error',
               })
+              activeRunRef.current = null
               setStreaming(false)
               setError(next.error)
-              reject(new Error(next.error || 'failed'))
+              resolve()
+            } else if (next.status === 'cancelled') {
+              clearTimers()
+              updateAssistant(assistantId, {
+                content: 'Stopped. Tell me what to change, or ask me to continue.',
+                activity: null,
+                kind: 'stopped',
+                status: 'stopped',
+              })
+              activeRunRef.current = null
+              setStreaming(false)
+              resolve()
             }
           } catch {
             /* keep polling */
@@ -152,12 +215,42 @@ export function useAgentChat(projectId: string | undefined) {
         }, 2000)
       })
     },
-    [projectId, clearTimers, updateAssistant],
+    [projectId, clearTimers, updateAssistant, refreshSessions, startPhraseRotation],
+  )
+
+  const loadSession = useCallback(
+    async (sessionId: string) => {
+      if (!projectId) return
+      clearTimers()
+      setHydrating(true)
+      setStreaming(false)
+      setError(null)
+      setActiveSessionId(sessionId)
+      activeRunRef.current = null
+      try {
+        const history = await projectsApi.listChatMessages(projectId, sessionId)
+        const mapped = historyToMessages(history)
+        setMessages(mapped)
+
+        const inFlight = [...mapped].reverse().find((m) => m.status === 'streaming' && m.runId)
+        if (inFlight?.runId) {
+          setStreaming(true)
+          await pollUntilDone(inFlight.id, inFlight.runId)
+        }
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Failed to load chat')
+      } finally {
+        setHydrating(false)
+      }
+    },
+    [projectId, clearTimers, pollUntilDone],
   )
 
   useEffect(() => {
     if (!projectId) {
       setMessages([])
+      setSessions([])
+      setActiveSessionId(null)
       setHydrating(false)
       return
     }
@@ -165,40 +258,23 @@ export function useAgentChat(projectId: string | undefined) {
     let cancelled = false
     clearTimers()
     setHydrating(true)
-    setStreaming(false)
-    setError(null)
 
     void (async () => {
       try {
-        const runs = await projectsApi.listRuns(projectId)
+        const list = await projectsApi.listSessions(projectId)
         if (cancelled) return
-        setMessages(runs.flatMap(runToMessages))
-
-        const inFlight = [...runs].reverse().find(
-          (r) => r.status === 'queued' || r.status === 'running',
-        )
-        if (inFlight) {
-          setStreaming(true)
-          const assistantId = `assistant-${inFlight.id}`
-          let stepIndex = 1
-          stepTimerRef.current = window.setInterval(() => {
-            stepIndex = Math.min(stepIndex + 1, GRAPH_TOOL_STEPS.length - 2)
-            updateAssistant(assistantId, {
-              tools: advanceTools(freshTools(), stepIndex),
-            })
-          }, 2200)
-          try {
-            await pollUntilDone(assistantId, inFlight.id)
-          } catch {
-            /* surfaced on message */
-          }
+        setSessions(list)
+        const active = list[0]?.id
+        if (active) await loadSession(active)
+        else {
+          setMessages([])
+          setHydrating(false)
         }
       } catch (e) {
         if (!cancelled) {
           setError(e instanceof Error ? e.message : 'Failed to load chat')
+          setHydrating(false)
         }
-      } finally {
-        if (!cancelled) setHydrating(false)
       }
     })()
 
@@ -206,7 +282,6 @@ export function useAgentChat(projectId: string | undefined) {
       cancelled = true
       clearTimers()
     }
-    // Intentionally only re-hydrate when project changes
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId])
 
@@ -214,51 +289,195 @@ export function useAgentChat(projectId: string | undefined) {
     async (text: string) => {
       if (!projectId || !text.trim() || streaming) return
       setError(null)
-      setStreaming(true)
+      clearTimers()
 
       const userMsg: ChatMessage = {
         id: uid(),
         role: 'user',
         content: text.trim(),
         createdAt: Date.now(),
+        kind: 'user',
+        status: 'complete',
       }
       const assistantId = uid()
-      const assistantMsg: ChatMessage = {
-        id: assistantId,
-        role: 'assistant',
-        content: '',
-        createdAt: Date.now(),
-        tools: freshTools(),
-        status: 'streaming',
-      }
-      setMessages((prev) => [...prev, userMsg, assistantMsg])
+      setMessages((prev) => [
+        ...prev,
+        userMsg,
+        {
+          id: assistantId,
+          role: 'assistant',
+          content: '',
+          createdAt: Date.now(),
+          activity: { phase: 'thinking', label: 'Reading your message…' },
+          status: 'streaming',
+          kind: 'reply',
+        },
+      ])
+      setStreaming(true)
 
-      let stepIndex = 0
-      updateAssistant(assistantId, { tools: advanceTools(freshTools(), 0) })
-      stepTimerRef.current = window.setInterval(() => {
-        stepIndex = Math.min(stepIndex + 1, GRAPH_TOOL_STEPS.length - 2)
-        updateAssistant(assistantId, {
-          tools: advanceTools(freshTools(), stepIndex),
-        })
-      }, 2200)
+      const controller = new AbortController()
+      abortRef.current = controller
+      activeAssistantRef.current = assistantId
+
+      let content = ''
+      let finalId: string = assistantId
+      let runId: string | undefined
+      let kind: ChatMessage['kind'] = 'reply'
+      let action: ChatMessage['action']
+      let questions: string[] = []
+      // Mutated inside onEvent; TS CFA does not see those writes after await.
+      let shouldPollGeneration = false
 
       try {
-        const run = await projectsApi.startRun(projectId, { prompt: text.trim() })
-        updateAssistant(assistantId, { runId: run.id })
-        await pollUntilDone(assistantId, run.id)
+        await streamChatMessage(projectId, text.trim(), activeSessionRef.current ?? undefined, {
+          signal: controller.signal,
+          onEvent: (evt) => {
+            if (evt.type === 'start') {
+              if (evt.session_id !== activeSessionRef.current) {
+                setActiveSessionId(evt.session_id)
+              }
+              return
+            }
+            if (evt.type === 'status') {
+              updateAssistant(assistantId, {
+                activity: {
+                  phase: evt.phase as ChatActivity['phase'],
+                  label: evt.label,
+                },
+                action: evt.action as ChatMessage['action'],
+              })
+              return
+            }
+            if (evt.type === 'text_delta') {
+              content += evt.delta
+              updateAssistant(assistantId, { content })
+              return
+            }
+            if (evt.type === 'run_started') {
+              finalId = evt.id
+              runId = evt.run_id
+              kind = 'generating'
+              shouldPollGeneration = true
+              action = evt.action as ChatMessage['action']
+              content = evt.content
+              setMessages((prev) =>
+                prev.map((m) => (m.id === assistantId ? { ...m, id: finalId, runId, kind } : m)),
+              )
+              activeAssistantRef.current = finalId
+              return
+            }
+            if (evt.type === 'done') {
+              finalId = evt.id
+              kind = evt.kind as ChatMessage['kind']
+              content = evt.content
+              questions = evt.questions ?? []
+              runId = evt.run_id
+              action = evt.action as ChatMessage['action']
+              shouldPollGeneration = evt.kind === 'generating' && Boolean(evt.run_id)
+              if (evt.session_id) setActiveSessionId(evt.session_id)
+            }
+          },
+        })
+
+        if (runId && shouldPollGeneration) {
+          updateAssistant(finalId, {
+            content,
+            kind: 'generating',
+            runId,
+            action,
+            activity: {
+              phase: action === 'rewrite' ? 'rewriting' : 'writing',
+              label: action === 'rewrite' ? REWRITE_PHRASES[0]! : WRITING_PHRASES[0]!,
+            },
+            status: 'streaming',
+          })
+          await pollUntilDone(finalId, runId, action)
+          return
+        }
+
+        updateAssistant(finalId, {
+          id: finalId,
+          content,
+          kind,
+          questions,
+          action,
+          activity: null,
+          status: 'complete',
+        })
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === assistantId || m.id === finalId
+              ? {
+                  ...m,
+                  id: finalId,
+                  content,
+                  kind,
+                  questions,
+                  activity: null,
+                  status: 'complete' as const,
+                }
+              : m,
+          ),
+        )
+        setStreaming(false)
+        void refreshSessions()
       } catch (e) {
+        if (controller.signal.aborted) return
         clearTimers()
-        const msg = e instanceof Error ? e.message : 'Failed to start run'
+        const msg = e instanceof Error ? e.message : 'Failed to send message'
         setError(msg)
-        updateAssistant(assistantId, {
+        updateAssistant(finalId, {
           content: msg,
+          activity: null,
           status: 'error',
-          tools: freshTools().map((t, i) => (i === 0 ? { ...t, status: 'error' } : t)),
         })
         setStreaming(false)
       }
     },
-    [projectId, streaming, clearTimers, updateAssistant, pollUntilDone],
+    [projectId, streaming, clearTimers, updateAssistant, pollUntilDone, refreshSessions],
+  )
+
+  const stop = useCallback(async () => {
+    if (!projectId) return
+    const runId = activeRunRef.current
+    const assistantId = activeAssistantRef.current
+    clearTimers()
+    setStreaming(false)
+    if (runId) {
+      try {
+        await projectsApi.cancelRun(projectId, runId)
+      } catch {
+        /* still mark stopped locally */
+      }
+    }
+    if (assistantId) {
+      updateAssistant(assistantId, {
+        content: 'Stopped. Tell me what to change, or ask me to continue.',
+        activity: null,
+        kind: 'stopped',
+        status: 'stopped',
+      })
+    }
+    activeRunRef.current = null
+  }, [projectId, clearTimers, updateAssistant])
+
+  const addSession = useCallback(async () => {
+    if (!projectId || streaming) return
+    clearTimers()
+    const session = await projectsApi.createSession(projectId)
+    const list = await refreshSessions()
+    setSessions(list)
+    setActiveSessionId(session.id)
+    setMessages([])
+    setError(null)
+  }, [projectId, streaming, clearTimers, refreshSessions])
+
+  const selectSession = useCallback(
+    async (sessionId: string) => {
+      if (sessionId === activeSessionRef.current || streaming) return
+      await loadSession(sessionId)
+    },
+    [loadSession, streaming],
   )
 
   const saveDraft = useCallback(
@@ -270,8 +489,7 @@ export function useAgentChat(projectId: string | undefined) {
           scriptId: script.id,
           isDraft: true,
           scriptPreview: script.screenplay_md,
-          content:
-            'Draft saved. You can keep editing it here, or open it from Drafts / Editor.',
+          content: 'Draft saved. You can keep editing it here, or open it from Drafts / Editor.',
         })
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Failed to save draft')
@@ -301,7 +519,19 @@ export function useAgentChat(projectId: string | undefined) {
     async (file: File): Promise<ProjectAttachment | null> => {
       if (!projectId) return null
       try {
-        return await projectsApi.uploadAttachment(projectId, file)
+        const att = await projectsApi.uploadAttachment(projectId, file)
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: uid(),
+            role: 'assistant',
+            content: `Added “${att.filename}” to project context. I'll use it when we write or revise your script.`,
+            createdAt: Date.now(),
+            kind: 'context',
+            status: 'complete',
+          },
+        ])
+        return att
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Upload failed')
         return null
@@ -312,12 +542,17 @@ export function useAgentChat(projectId: string | undefined) {
 
   return {
     messages,
+    sessions,
+    activeSessionId,
     hydrating,
     streaming,
     error,
     send,
+    stop,
     attach,
     saveDraft,
     updateDraft,
+    addSession,
+    selectSession,
   }
 }

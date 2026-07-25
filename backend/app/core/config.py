@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from pydantic import field_validator
+from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Walk up from this file to find .env at the project root
@@ -17,7 +17,6 @@ def normalize_database_url(url: str) -> str:
         url = "postgresql+asyncpg://" + url.removeprefix("postgresql://")
     elif url.startswith("postgres://"):
         url = "postgresql+asyncpg://" + url.removeprefix("postgres://")
-    # libpq sslmode → asyncpg ssl
     url = url.replace("sslmode=require", "ssl=require")
     url = url.replace("sslmode=verify-full", "ssl=require")
     return url
@@ -87,6 +86,15 @@ class Settings(BaseSettings):
     llm_model: str = "gpt-4o"
 
     # Legacy aliases used by some team snippets
+    # LLM (Script Writer + chat orchestrator)
+    llm_provider: str = "openai"
+    llm_api_key: str = Field(
+        default="",
+        validation_alias=AliasChoices("LLM_API_KEY", "OPENAI_API_KEY"),
+    )
+    llm_model: str = "gpt-4o"
+
+    # Legacy aliases still used in some paths
     openai_api_key: str = ""
     openai_model: str = "gpt-4o"
     tavily_api_key: str = ""
@@ -100,6 +108,18 @@ class Settings(BaseSettings):
         if configured:
             return configured
         return f"{self.databricks_catalog}.{self.databricks_schema}.{self.databricks_cast_table}_index"
+    # Databricks AI Search (optional — local chunk fallback if unset)
+    databricks_host: str = ""
+    databricks_token: str = ""
+    databricks_ai_search_endpoint: str = ""
+    databricks_ai_search_index: str = ""
+    databricks_embedding_endpoint: str = ""
+
+    # ElevenLabs TTS (timeline dialogue). Without key, API returns stub tones.
+    elevenlabs_api_key: str = Field(
+        default="",
+        validation_alias=AliasChoices("ELEVENLABS_API_KEY"),
+    )
 
     @field_validator("database_url", mode="before")
     @classmethod
@@ -108,8 +128,13 @@ class Settings(BaseSettings):
             return normalize_database_url(value)
         return value
 
+    @property
+    def effective_llm_api_key(self) -> str:
+        return (self.llm_api_key or self.openai_api_key or "").strip()
 
 settings = Settings()
 # Allow OPENAI_API_KEY to stand in for LLM_API_KEY when only one is set.
 if not (settings.llm_api_key or "").strip() and (settings.openai_api_key or "").strip():
     settings.llm_api_key = settings.openai_api_key
+
+settings = Settings()

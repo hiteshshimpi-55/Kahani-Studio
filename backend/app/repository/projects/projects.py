@@ -1,7 +1,14 @@
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.repository.models.project import Project, ProjectAttachment, ProjectRun, Script
+from app.repository.models.project import (
+    ChatSession,
+    ChatTurn,
+    Project,
+    ProjectAttachment,
+    ProjectRun,
+    Script,
+)
 
 
 class ProjectRepository:
@@ -23,6 +30,10 @@ class ProjectRepository:
             select(Project).order_by(Project.updated_at.desc())
         )
         return list(result.scalars().all())
+
+    async def delete(self, project: Project) -> None:
+        await self._session.delete(project)
+        await self._session.flush()
 
 
 class AttachmentRepository:
@@ -57,6 +68,80 @@ class AttachmentRepository:
             await self._session.flush()
 
 
+class ChatSessionRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def create(self, session_row: ChatSession) -> ChatSession:
+        self._session.add(session_row)
+        await self._session.flush()
+        await self._session.refresh(session_row)
+        return session_row
+
+    async def get(self, session_id: str) -> ChatSession | None:
+        return await self._session.get(ChatSession, session_id)
+
+    async def list_for_project(self, project_id: str) -> list[ChatSession]:
+        result = await self._session.execute(
+            select(ChatSession)
+            .where(ChatSession.project_id == project_id)
+            .order_by(ChatSession.created_at.desc())
+        )
+        return list(result.scalars().all())
+
+    async def latest_for_project(self, project_id: str) -> ChatSession | None:
+        result = await self._session.execute(
+            select(ChatSession)
+            .where(ChatSession.project_id == project_id)
+            .order_by(ChatSession.created_at.desc())
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
+
+
+
+class ChatTurnRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def create(self, turn: ChatTurn) -> ChatTurn:
+        self._session.add(turn)
+        await self._session.flush()
+        await self._session.refresh(turn)
+        return turn
+
+    async def list_for_session(self, session_id: str) -> list[ChatTurn]:
+        result = await self._session.execute(
+            select(ChatTurn)
+            .where(ChatTurn.session_id == session_id)
+            .order_by(ChatTurn.created_at.asc())
+        )
+        return list(result.scalars().all())
+
+    async def update_kind(
+        self,
+        turn_id: str,
+        *,
+        kind: str,
+        content: str | None = None,
+        meta: dict | None = None,
+        run_id: str | None = None,
+    ) -> ChatTurn | None:
+        row = await self._session.get(ChatTurn, turn_id)
+        if not row:
+            return None
+        row.kind = kind
+        if content is not None:
+            row.content = content
+        if meta is not None:
+            row.meta = meta
+        if run_id is not None:
+            row.run_id = run_id
+        await self._session.flush()
+        await self._session.refresh(row)
+        return row
+
+
 class RunRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
@@ -70,13 +155,25 @@ class RunRepository:
     async def get(self, run_id: str) -> ProjectRun | None:
         return await self._session.get(ProjectRun, run_id)
 
-    async def list_for_project(self, project_id: str) -> list[ProjectRun]:
-        result = await self._session.execute(
-            select(ProjectRun)
-            .where(ProjectRun.project_id == project_id)
-            .order_by(ProjectRun.created_at.asc())
-        )
+    async def list_for_project(
+        self, project_id: str, *, session_id: str | None = None
+    ) -> list[ProjectRun]:
+        stmt = select(ProjectRun).where(ProjectRun.project_id == project_id)
+        if session_id is not None:
+            stmt = stmt.where(ProjectRun.session_id == session_id)
+        result = await self._session.execute(stmt.order_by(ProjectRun.created_at.asc()))
         return list(result.scalars().all())
+
+    async def assign_orphans(self, project_id: str, session_id: str) -> None:
+        await self._session.execute(
+            update(ProjectRun)
+            .where(
+                ProjectRun.project_id == project_id,
+                ProjectRun.session_id.is_(None),
+            )
+            .values(session_id=session_id)
+        )
+        await self._session.flush()
 
     async def update_status(
         self,

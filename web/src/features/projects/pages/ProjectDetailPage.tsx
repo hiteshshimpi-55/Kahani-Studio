@@ -7,6 +7,7 @@ import { PromptComposer } from '../components/PromptComposer'
 import { useAttachments } from '../hooks/use-attachments'
 import { useProject } from '../hooks/use-project'
 import { useProjectRun } from '../hooks/use-project-run'
+import { NotFoundView } from '@/features/system/pages/NotFoundPage'
 
 export function ProjectDetailPage() {
   const { projectId } = useParams<{ projectId: string }>()
@@ -27,16 +28,10 @@ export function ProjectDetailPage() {
 
   if (error || !project) {
     return (
-      <div className="mx-auto max-w-6xl">
-        <p className="text-[13px] text-destructive">{error || 'Project not found'}</p>
-        <Link
-          to="/"
-          className="mt-4 inline-flex items-center gap-1.5 text-[13px] font-medium text-[var(--brand)] hover:underline"
-        >
-          <ArrowLeft className="h-3.5 w-3.5" />
-          Back to projects
-        </Link>
-      </div>
+      <NotFoundView
+        kind="project"
+        detail={error && error !== 'Project not found' ? error : null}
+      />
     )
   }
 

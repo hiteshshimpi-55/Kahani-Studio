@@ -4,12 +4,51 @@ import { Play } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
+/** Library cards; elevenLabsVoiceId maps into Editor timeline voiceMap. */
 const VOICES = [
-  { id: 'n1', name: 'NARRATOR Calm', lang: 'English', style: 'Thriller guide', tags: ['narrator'] },
-  { id: 'r1', name: 'RIYA Soft', lang: 'Hindi', style: 'Nervous lead', tags: ['character'] },
-  { id: 'a1', name: 'ARJUN Steady', lang: 'Hindi', style: 'Ally / protector', tags: ['character'] },
-  { id: 'v1', name: 'THE VOICE', lang: 'English', style: 'Distorted whisper', tags: ['fx-voice'] },
-  { id: 'h1', name: 'HOST Warm', lang: 'English', style: 'Podcast energy', tags: ['narrator'] },
+  {
+    id: 'n1',
+    name: 'NARRATOR Calm',
+    lang: 'English',
+    style: 'Thriller guide',
+    tags: ['narrator'],
+    elevenLabsVoiceId: '21m00Tcm4TlvDq8ikWAM',
+    characterHint: 'narrator',
+  },
+  {
+    id: 'r1',
+    name: 'RIYA Soft',
+    lang: 'Hindi',
+    style: 'Nervous lead',
+    tags: ['character'],
+    elevenLabsVoiceId: 'EXAVITQu4vr4xnSDxMaL',
+    characterHint: 'riya',
+  },
+  {
+    id: 'a1',
+    name: 'ARJUN Steady',
+    lang: 'Hindi',
+    style: 'Ally / protector',
+    tags: ['character'],
+    elevenLabsVoiceId: 'pNInz6obpgDQGcFmaJgB',
+    characterHint: 'arjun',
+  },
+  {
+    id: 'v1',
+    name: 'THE VOICE',
+    lang: 'English',
+    style: 'Distorted whisper',
+    tags: ['fx-voice'],
+    elevenLabsVoiceId: 'VR6AewLTigWG4xSOukaG',
+  },
+  {
+    id: 'h1',
+    name: 'HOST Warm',
+    lang: 'English',
+    style: 'Podcast energy',
+    tags: ['narrator'],
+    elevenLabsVoiceId: '21m00Tcm4TlvDq8ikWAM',
+  },
 ]
 
 const SFX = [

@@ -32,7 +32,7 @@ export function SettingsSheet({ open, onClose }: Props) {
       <button
         type="button"
         aria-label="Close settings"
-        className="settings-backdrop absolute inset-0 bg-black/35 backdrop-blur-[2px]"
+        className="settings-backdrop absolute inset-0 overlay-backdrop"
         onClick={onClose}
       />
       <aside

@@ -33,13 +33,14 @@ services:
     env_file:
       - .env
     environment:
-      # Prefer Lakebase from .env; fall back to local compose Postgres.
       DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://kissa:kissa@postgres:5432/kissa}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
       DATA_DIR: ${DATA_DIR:-/data}
     volumes:
       - kissa_data:/data
     depends_on:
+      postgres:
+        condition: service_healthy
       redis:
         condition: service_healthy
       postgres:
@@ -47,9 +48,9 @@ services:
     ports:
       - "8000:8000"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health/live"]
       interval: 10s
-      timeout: 5s
+      timeout: 3s
       retries: 10
       start_period: 15s
 
@@ -67,6 +68,8 @@ services:
     volumes:
       - kissa_data:/data
     depends_on:
+      postgres:
+        condition: service_healthy
       redis:
         condition: service_healthy
       postgres:
@@ -78,8 +81,6 @@ services:
     build:
       context: ./web
       dockerfile: Dockerfile
-      args:
-        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8000}
     depends_on:
       api:
         condition: service_healthy

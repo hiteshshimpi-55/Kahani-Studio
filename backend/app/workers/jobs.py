@@ -6,7 +6,7 @@ import json
 import logging
 from pathlib import Path
 
-from app.agents.graph.graph import run_project_graph
+from app.agents.graph.graph import RunCancelled, run_project_graph_cancellable
 from app.core.db.session import AsyncSessionLocal
 from app.integrations.databricks_ai_search import AISearchClient
 from app.repository.projects import AttachmentRepository, RunRepository
@@ -59,6 +59,9 @@ async def project_run_job(ctx: dict, project_id: str, run_id: str) -> dict:
         if not run or run.project_id != project_id:
             return {"ok": False, "error": "run not found"}
 
+        if run.status == "cancelled":
+            return {"ok": False, "cancelled": True}
+
         await runs.update_status(run_id, status="running")
         await session.commit()
 
@@ -76,13 +79,49 @@ async def project_run_job(ctx: dict, project_id: str, run_id: str) -> dict:
                 "screenplay_md": None,
                 "errors": [],
             }
-            result = await run_project_graph(initial)
+
+            async def _cancelled() -> bool:
+                async with AsyncSessionLocal() as s2:
+                    row = await RunRepository(s2).get(run_id)
+                    return bool(row and row.status == "cancelled")
+
+            try:
+                thread_id = run.langgraph_thread_id or run_id
+                if not run.langgraph_thread_id:
+                    await runs.update_status(
+                        run_id, status=run.status, langgraph_thread_id=thread_id
+                    )
+                    await session.commit()
+
+                result = await run_project_graph_cancellable(
+                    initial,
+                    is_cancelled=_cancelled,
+                    thread_id=thread_id,
+                )
+            except RunCancelled:
+                await session.rollback()
+                async with AsyncSessionLocal() as session2:
+                    runs2 = RunRepository(session2)
+                    await runs2.update_status(
+                        run_id, status="cancelled", error="Stopped by user"
+                    )
+                    await session2.commit()
+                return {"ok": False, "cancelled": True}
+
+            if await _cancelled():
+                await session.rollback()
+                async with AsyncSessionLocal() as session2:
+                    runs2 = RunRepository(session2)
+                    await runs2.update_status(
+                        run_id, status="cancelled", error="Stopped by user"
+                    )
+                    await session2.commit()
+                return {"ok": False, "cancelled": True}
 
             package = result.get("script_package") or {}
             screenplay = result.get("screenplay_md") or ""
             out_dir = runs_dir(project_id, run_id)
 
-            # Persist run artifacts only — drafts are saved explicitly from chat.
             (out_dir / "script.json").write_text(
                 json.dumps(package, ensure_ascii=False, indent=2), encoding="utf-8"
             )
@@ -96,6 +135,9 @@ async def project_run_job(ctx: dict, project_id: str, run_id: str) -> dict:
             await session.rollback()
             async with AsyncSessionLocal() as session2:
                 runs2 = RunRepository(session2)
+                current = await runs2.get(run_id)
+                if current and current.status == "cancelled":
+                    return {"ok": False, "cancelled": True}
                 await runs2.update_status(run_id, status="failed", error=str(exc)[:2000])
                 await session2.commit()
             return {"ok": False, "error": str(exc)}

@@ -8,6 +8,7 @@ import { ProjectContextPage } from '@/features/projects/pages/ProjectContextPage
 import { ProjectDraftsPage } from '@/features/projects/pages/ProjectDraftsPage'
 import { ProjectVisualsPage } from '@/features/projects/pages/ProjectVisualsPage'
 import { ProjectsPage } from '@/features/projects/pages/ProjectsPage'
+import { NotFoundPage } from '@/features/system/pages/NotFoundPage'
 import { SystemStatusPage } from '@/features/system/pages/SystemStatusPage'
 import { VoiceLibraryPage } from '@/features/voices/pages/VoiceLibraryPage'
 
@@ -39,7 +40,7 @@ export const router = createBrowserRouter([
       { path: 'voices', element: <VoiceLibraryPage /> },
       { path: 'system', element: <SystemStatusPage /> },
       { path: 'settings/*', element: <Navigate to="/" replace /> },
-      { path: '*', element: <Navigate to="/" replace /> },
+      { path: '*', element: <NotFoundPage /> },
     ],
   },
 ])
