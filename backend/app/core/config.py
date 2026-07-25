@@ -31,6 +31,18 @@ class Settings(BaseSettings):
 
     allowed_origins: list[str] = ["*"]
 
+    # Databricks AI Search (optional — falls back to local chunk store)
+    databricks_host: str = ""
+    databricks_token: str = ""
+    databricks_ai_search_endpoint: str = ""
+    databricks_ai_search_index: str = ""
+    databricks_embedding_endpoint: str = ""
+
+    # LLM Script Writer (provider-derived client)
+    llm_provider: str = "openai"
+    llm_api_key: str = ""
+    llm_model: str = ""
+
     @field_validator("database_url", mode="before")
     @classmethod
     def _normalize_db_url(cls, value: object) -> object:
