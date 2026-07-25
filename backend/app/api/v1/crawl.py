@@ -1,34 +1,28 @@
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies.db import get_db
+from app.integrations.tavily.client import crawl_for_extraction
 from app.schemas.crawl.request import CrawlRequest
 from app.schemas.crawl.response import CrawlResponse
 from app.schemas.extraction.response import ExtractionResponse
-from contentExtraction.scrapper import crawl_for_extraction
+from app.services.extraction import service as extraction_service
 
-router = APIRouter(prefix="/api/crawl", tags=["crawl"])
+log = logging.getLogger(__name__)
+
+router = APIRouter(prefix="/crawl", tags=["crawl"])
 
 
 @router.post("", response_model=CrawlResponse)
 async def crawl(body: CrawlRequest, db: AsyncSession = Depends(get_db)):
-    """
-    Search the web for reference material based on a prior extraction.
-
-    Supply either:
-    - extraction_id: load the saved extraction from the database
-    - extraction:    pass the ExtractionResponse directly
-    """
     extraction: ExtractionResponse | None = None
 
     if body.extraction:
         extraction = body.extraction
-
     elif body.extraction_id is not None:
-        from app.repository.models.extraction import ExtractionResult as ExtractionResultORM
-        from sqlalchemy import select
-
-        row = await db.get(ExtractionResultORM, body.extraction_id)
+        row = await extraction_service.get_extraction_by_id(body.extraction_id, db)
         if row is None:
             raise HTTPException(status_code=404, detail="extraction not found")
 
@@ -46,7 +40,6 @@ async def crawl(body: CrawlRequest, db: AsyncSession = Depends(get_db)):
             "video": row.video.__dict__ if row.video else {},
             "audio": row.audio.__dict__ if row.audio else {},
         })
-
     else:
         raise HTTPException(
             status_code=422,
