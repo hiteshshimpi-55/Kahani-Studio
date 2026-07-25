@@ -11,13 +11,14 @@ module "network" {
 }
 
 module "rds" {
-  source             = "./modules/rds"
-  project_name       = var.project_name
-  environment        = var.environment
-  vpc_id             = module.network.vpc_id
-  private_subnet_ids = module.network.private_subnet_ids
-  security_group_id  = module.network.rds_security_group_id
-  instance_class     = var.db_instance_class
+  source              = "./modules/rds"
+  project_name        = var.project_name
+  environment         = var.environment
+  vpc_id              = module.network.vpc_id
+  subnet_ids          = module.network.private_subnet_ids
+  security_group_id   = module.network.rds_security_group_id
+  instance_class      = var.db_instance_class
+  publicly_accessible = false
 }
 
 module "redis" {
