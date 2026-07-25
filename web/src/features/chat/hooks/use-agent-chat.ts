@@ -513,17 +513,19 @@ export function useAgentChat(projectId: string | undefined) {
 
   const saveDraft = useCallback(
     async (runId: string, assistantId: string, screenplay_md?: string) => {
-      if (!projectId) return
+      if (!projectId) return undefined
       try {
         const script = await projectsApi.saveRunAsDraft(projectId, runId, screenplay_md)
         updateAssistant(assistantId, {
           scriptId: script.id,
           isDraft: true,
           scriptPreview: script.screenplay_md,
-          content: 'Draft saved. You can keep editing it here, or open it from Drafts / Editor.',
+          content: 'Draft saved. You can generate audio, keep editing, or open Drafts / Editor.',
         })
+        return script
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Failed to save draft')
+        return undefined
       }
     },
     [projectId, updateAssistant],

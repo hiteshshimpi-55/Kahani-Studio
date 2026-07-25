@@ -17,7 +17,7 @@ export function ChatMessageList({
   messages: ChatMessage[]
   projectId: string
   streaming: boolean
-  onSaveDraft?: (runId: string, messageId: string, text?: string) => void | Promise<void>
+  onSaveDraft?: (runId: string, messageId: string, text?: string) => void | Promise<{ id: string } | void>
   onUpdateDraft?: (scriptId: string, messageId: string, text: string) => void | Promise<void>
   onPickPlot?: (pitch: PlotPitch) => void
 }) {
@@ -91,7 +91,7 @@ export function ChatMessageList({
                       isDraft={message.isDraft}
                       onSaveDraft={
                         message.runId && onSaveDraft
-                          ? (text) => onSaveDraft(message.runId!, message.id, text)
+                          ? async (text) => onSaveDraft(message.runId!, message.id, text)
                           : undefined
                       }
                       onUpdateDraft={

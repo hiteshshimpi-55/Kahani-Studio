@@ -110,6 +110,12 @@ def _search(
     num_results: int = 8,
 ) -> list[CastCandidate]:
     """Vector search by asset_type. Provider preference is applied after ranking."""
+    endpoint = (settings.databricks_vector_search_endpoint or "").strip()
+    index = (settings.databricks_vector_search_index or "").strip()
+    if not endpoint or not index:
+        # Local/dev without cast catalog — caller falls back to curated voice pools.
+        return []
+
     filters: dict[str, Any] = {"asset_type": asset_type}
     result = similarity_search(
         VectorSearchQuery(
@@ -118,8 +124,8 @@ def _search(
             num_results=num_results,
             filters=filters,
             query_type="ANN",
-            endpoint_name=settings.databricks_vector_search_endpoint,
-            index_name=settings.databricks_cast_index_fqn,
+            endpoint_name=endpoint,
+            index_name=index,
         )
     )
     candidates: list[CastCandidate] = []

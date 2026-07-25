@@ -79,6 +79,19 @@ class ScriptDetailResponse(ScriptLatestResponse):
     pass
 
 
+class ScriptAudioStatusResponse(BaseModel):
+    script_id: str
+    project_id: str
+    status: str  # idle | queued | running | succeeded | failed
+    error: str | None = None
+    audio_url: str | None = None
+    voice_provider: str | None = None
+    line_count: int | None = None
+    sfx_clip_count: int | None = None
+    title: str | None = None
+    updated_at: str | None = None
+
+
 class ChatMessageResponse(BaseModel):
     id: str
     role: str

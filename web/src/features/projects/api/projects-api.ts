@@ -200,3 +200,42 @@ export async function updateScript(
   })
   return parseJson(res)
 }
+
+export type ScriptAudioStatus = {
+  script_id: string
+  project_id: string
+  status: 'idle' | 'queued' | 'running' | 'succeeded' | 'failed' | string
+  error?: string | null
+  audio_url?: string | null
+  voice_provider?: string | null
+  line_count?: number | null
+  sfx_clip_count?: number | null
+  title?: string | null
+  updated_at?: string | null
+}
+
+export async function generateScriptAudio(
+  projectId: string,
+  scriptId: string,
+  opts?: { max_sec?: number; voice_provider?: string },
+): Promise<ScriptAudioStatus> {
+  const res = await fetch(apiUrl(`/api/v1/projects/${projectId}/scripts/${scriptId}/audio`), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      max_sec: opts?.max_sec ?? 300,
+      voice_provider: opts?.voice_provider ?? 'elevenlabs',
+      with_sfx: true,
+      with_bed: true,
+    }),
+  })
+  return parseJson(res)
+}
+
+export async function getScriptAudioStatus(
+  projectId: string,
+  scriptId: string,
+): Promise<ScriptAudioStatus> {
+  const res = await fetch(apiUrl(`/api/v1/projects/${projectId}/scripts/${scriptId}/audio`))
+  return parseJson(res)
+}

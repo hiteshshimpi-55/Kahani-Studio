@@ -11,8 +11,8 @@ from app.workers.jobs import (
     delete_attachment_index_job,
     index_attachment_job,
     project_run_job,
+    script_audio_job,
 )
-
 
 async def ping_job(ctx: dict) -> dict:
     """Smoke-test job — proves worker + Redis queue are wired."""
@@ -135,6 +135,7 @@ class WorkerSettings:
         index_attachment_job,
         delete_attachment_index_job,
         project_run_job,
+        script_audio_job,
         tts_synthesize_job,
         render_visual_track,
     ]
