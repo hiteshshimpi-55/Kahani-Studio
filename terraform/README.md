@@ -98,6 +98,12 @@ That copies every non-empty `KEY=value` from `.env` into the secret, except:
 - Protected AWS infra keys (never overwritten by local Compose values):
   `DATABASE_URL`, `REDIS_URL`, `ARTIFACTS_BUCKET`, `ALLOWED_ORIGINS`
 
+ECS also injects image/research keys when present in the secret JSON:
+`IMAGE_PROVIDER`, `OPENAI_IMAGE_MODEL`, `OPENAI_IMAGE_QUALITY`, `TAVILY_API_KEY`,
+plus optional `GEMINI_API_KEY` / `GEMINI_TEXT_MODEL` / `GEMINI_IMAGE_MODEL`.
+After adding new keys to `modules/ecs` `app_secret_keys`, sync secrets first,
+then `terraform apply` so task definitions pick them up.
+
 Force new ECS deployments after secret **or** task-definition changes:
 
 ```bash

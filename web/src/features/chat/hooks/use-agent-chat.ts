@@ -4,7 +4,6 @@ import * as projectsApi from '@/features/projects/api/projects-api'
 import type { ChatSession, ProjectAttachment } from '@/features/projects/types'
 
 import { streamChatMessage } from '../lib/chat-stream'
-import type { PlotPitch } from '../lib/chat-stream'
 import {
   REWRITE_PHRASES,
   WRITING_PHRASES,

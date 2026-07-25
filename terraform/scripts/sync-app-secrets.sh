@@ -35,6 +35,17 @@ REQUIRED_KEYS=(
   DATABRICKS_SCHEMA
   DATABRICKS_CAST_TABLE
   DATABRICKS_EMBEDDING_ENDPOINT
+  IMAGE_PROVIDER
+  OPENAI_IMAGE_MODEL
+  OPENAI_IMAGE_QUALITY
+  TAVILY_API_KEY
+)
+
+# Optional — synced from .env when present; empty string allowed in SM
+OPTIONAL_KEYS=(
+  GEMINI_API_KEY
+  GEMINI_TEXT_MODEL
+  GEMINI_IMAGE_MODEL
 )
 
 if [[ ! -f "$ENV_FILE" ]]; then
@@ -56,6 +67,7 @@ CURRENT="$(aws secretsmanager get-secret-value \
   --output text)"
 
 printf '%s\n' "${REQUIRED_KEYS[@]}" > /tmp/kissa-required-keys.txt
+printf '%s\n' "${OPTIONAL_KEYS[@]}" > /tmp/kissa-optional-keys.txt
 
 export CURRENT ENV_FILE ARTIFACTS_BUCKET REDIS_URL ALLOWED_ORIGINS
 
@@ -63,6 +75,7 @@ python3 -c '
 import json, os
 
 required = open("/tmp/kissa-required-keys.txt", encoding="utf-8").read().split()
+optional = open("/tmp/kissa-optional-keys.txt", encoding="utf-8").read().split()
 protected = {"DATABASE_URL", "REDIS_URL", "ARTIFACTS_BUCKET", "ALLOWED_ORIGINS"}
 current = json.loads(os.environ["CURRENT"] or "{}")
 updated = []
@@ -73,6 +86,8 @@ current["ARTIFACTS_BUCKET"] = os.environ["ARTIFACTS_BUCKET"]
 current["ALLOWED_ORIGINS"] = os.environ["ALLOWED_ORIGINS"]
 current.setdefault("DATA_DIR", "/data")
 current.setdefault("DATABASE_URL", "")  # must already exist from RDS seed
+for key in optional:
+    current.setdefault(key, "")
 
 with open(os.environ["ENV_FILE"], encoding="utf-8") as f:
     for raw in f:
@@ -94,7 +109,7 @@ if missing:
 print(json.dumps(current))
 open("/tmp/kissa-sync-keys.txt", "w").write("\n".join(sorted(set(updated))))
 ' > /tmp/kissa-app-secret.json
-rm -f /tmp/kissa-required-keys.txt
+rm -f /tmp/kissa-required-keys.txt /tmp/kissa-optional-keys.txt
 
 aws secretsmanager put-secret-value \
   --secret-id "$SECRET_ARN" \

@@ -49,6 +49,13 @@ locals {
     "DATABRICKS_SCHEMA",
     "DATABRICKS_CAST_TABLE",
     "DATABRICKS_EMBEDDING_ENDPOINT",
+    "IMAGE_PROVIDER",
+    "OPENAI_IMAGE_MODEL",
+    "OPENAI_IMAGE_QUALITY",
+    "TAVILY_API_KEY",
+    "GEMINI_API_KEY",
+    "GEMINI_TEXT_MODEL",
+    "GEMINI_IMAGE_MODEL",
   ]
 
   app_secrets = [
@@ -81,6 +88,13 @@ locals {
     DATABRICKS_SCHEMA                  = "kissa"
     DATABRICKS_CAST_TABLE              = "cast_assets"
     DATABRICKS_EMBEDDING_ENDPOINT      = "databricks-qwen3-embedding-0-6b"
+    IMAGE_PROVIDER                     = "openai"
+    OPENAI_IMAGE_MODEL                 = "gpt-image-1"
+    OPENAI_IMAGE_QUALITY               = "medium"
+    TAVILY_API_KEY                     = ""
+    GEMINI_API_KEY                     = ""
+    GEMINI_TEXT_MODEL                  = "gemini-2.5-flash"
+    GEMINI_IMAGE_MODEL                 = "gemini-3.1-flash-image"
   }
 }
 
