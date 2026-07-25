@@ -1,0 +1,15 @@
+---
+description: FastAPI Synqed-style module layering for Kissa backend
+globs: backend/**/*.py
+alwaysApply: false
+---
+
+# Backend modules
+
+- Layering: `api` (thin) → `services` → `repository` / `integrations`
+- Schemas in `app/schemas/`; ORM in `app/repository/models/`
+- **Repos never `commit`** — `get_db_session` commits on success / rolls back on error
+- Config in `app/core/config.py`; normalize DB URLs to `postgresql+asyncpg` + `ssl=require` when needed
+- Product routes under `/api/v1/…`; keep `/api/health` for probes
+- ARQ jobs: define in `worker/settings.py`, enqueue from `services/`
+- Do not add Cognito/JWT/auth middleware

@@ -1,0 +1,14 @@
+---
+description: TCC-style Vite feature modules for Kissa web
+globs: web/src/**/*.{ts,tsx}
+alwaysApply: false
+---
+
+# Web feature modules
+
+- Domain code in `src/features/<name>/` with `api/`, `components/`, `hooks/`, `pages/`, `types.ts`
+- Components call `features/*/api/` — no raw `fetch` in UI components
+- App shell: `src/app/{App,providers,router}.tsx`; shared UI in `src/components/`
+- Env via `src/lib/env.ts` (`VITE_*` only); helpers in `src/lib/utils.ts`
+- Use `@/` imports; keep `src/pages/` thin (re-exports)
+- No Clerk/auth providers unless asked

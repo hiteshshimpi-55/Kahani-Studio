@@ -1,0 +1,13 @@
+---
+description: Kissa monorepo core context — Compose-only, no auth, external DB
+alwaysApply: true
+---
+
+# Kissa project
+
+- Monorepo: `web/` (Vite React), `backend/` (FastAPI + ARQ worker), `docs/PRD.md`
+- Run with **Docker Compose only** (`web`, `api`, `worker`, `redis`). No local Postgres — use `DATABASE_URL` in root `.env`
+- **No auth** unless explicitly requested
+- Never commit `.env` or secrets; update `.env.example` with placeholders only
+- Frontend API base: `VITE_API_BASE_URL` (rebuild web after changes)
+- Full context: `CLAUDE.md`
