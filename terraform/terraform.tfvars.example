@@ -1,0 +1,15 @@
+aws_region   = "ap-south-2"
+project_name = "kahani"
+environment  = "dev"
+api_domain   = "api.uselamp.app"
+# false until ACM DNS validation completes; then flip to true
+enable_https = false
+
+web_origins = [
+  "https://uselamp.app",
+  "https://www.uselamp.app",
+]
+
+# GitHub org/user + repo for Actions OIDC deploy role
+github_org  = "YOUR_GITHUB_ORG_OR_USER"
+github_repo = "Kissa"
