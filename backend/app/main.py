@@ -1,51 +1,43 @@
+import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
-import logging
 
+from arq import create_pool
+from arq.connections import RedisSettings
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import error_handlers
-from app.api.router import router as api_router
+from app.api.router import router
 from app.core.config import settings
 from app.core.db.session import Base, engine
-from app.core.logging import configure_logging
-from app.integrations.redis.client import close_redis_pool, create_redis_pool
-from app.middleware import logging as logging_mw
-from app.middleware import request_id as request_id_mw
-from app.repository import models as _models  # noqa: F401 — register ORM models
-configure_logging()
+
+# Import all models so SQLAlchemy metadata picks them up for create_all
+import app.repository.models.health  # noqa: F401
+import app.repository.models.audience  # noqa: F401
+
 log = logging.getLogger(__name__)
+
+
+def _redis_settings() -> RedisSettings:
+    return RedisSettings.from_dsn(settings.redis_url)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     Path(settings.data_dir).mkdir(parents=True, exist_ok=True)
-    try:
-        async with engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
-    except Exception:
-        log.exception(
-            "database_startup_failed — API will start; /api/health will show postgres down. "
-            "Check DATABASE_URL (user:password@host) in .env"
-        )
-    app.state.redis = await create_redis_pool()
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    app.state.redis = await create_pool(_redis_settings())
+    log.info("startup_complete", extra={"data_dir": settings.data_dir})
     yield
-    await close_redis_pool(app.state.redis)
+    await app.state.redis.aclose()
     await engine.dispose()
 
 
-app = FastAPI(
-    title=settings.app_name,
-    version="0.1.0",
-    debug=settings.debug,
-    lifespan=lifespan,
-)
+app = FastAPI(title="Kissa API", version="0.1.0", lifespan=lifespan)
 
 error_handlers.install(app)
-# Starlette: last add_middleware is outermost — request_id must wrap access log.
-logging_mw.install(app)
-request_id_mw.install(app)
 
 app.add_middleware(
     CORSMiddleware,
@@ -55,4 +47,4 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(api_router, prefix=settings.api_prefix)
+app.include_router(router, prefix=settings.api_prefix)

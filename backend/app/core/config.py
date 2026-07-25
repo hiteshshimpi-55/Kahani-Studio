@@ -47,6 +47,17 @@ class Settings(BaseSettings):
     # Tavily
     tavily_api_key: str = ""
 
+    # Databricks AI Search (optional — local fallback if unset)
+    databricks_host: str = ""
+    databricks_token: str = ""
+    databricks_ai_search_endpoint: str = ""
+    databricks_ai_search_index: str = ""
+
+    # LLM provider (optional)
+    llm_provider: str = "openai"
+    llm_api_key: str = ""
+    llm_model: str = "gpt-4o"
+
     @field_validator("database_url", mode="before")
     @classmethod
     def _normalize_db_url(cls, value: object) -> object:

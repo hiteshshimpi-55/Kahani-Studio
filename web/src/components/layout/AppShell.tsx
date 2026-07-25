@@ -4,6 +4,7 @@ import {
   ChevronsRight,
   Mic2,
   PenLine,
+  Users,
 } from 'lucide-react'
 import { useState, type ComponentType } from 'react'
 import { Link, Outlet, useLocation } from 'react-router-dom'
@@ -153,6 +154,7 @@ export function AppShell() {
             <SidebarProjects collapsed={collapsed} />
             <SidebarLink to="/editor" label="Editor" icon={PenLine} collapsed={collapsed} />
             <SidebarLink to="/voices" label="Voice & SFX" icon={Mic2} collapsed={collapsed} />
+            <SidebarLink to="/audience" label="Audience Sim" icon={Users} collapsed={collapsed} />
             <SidebarLink
               to="/system"
               label="System"
