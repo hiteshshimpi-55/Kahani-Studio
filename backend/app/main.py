@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.db import Base, engine, get_db
 from app.models import HealthPing
+from routes.extraction import router as extraction_router
 
 
 def redis_settings() -> RedisSettings:
@@ -37,6 +38,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(extraction_router)
 
 
 @app.get("/api/health")
