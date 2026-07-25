@@ -58,8 +58,12 @@ UI never calls `fetch` ad hoc in components — go through `features/*/api/`.
 ## Runtime
 
 ```bash
-docker compose up --build
+make run          # hot-reload: Vite HMR + uvicorn --reload + worker watch
+make prod         # production-like images (nginx web; rebuild required for FE changes)
+make down
 ```
+
+After the first `make run`, **edit FE/BE source and refresh** — no rebuild needed for normal code changes. Rebuild only when dependencies or Dockerfiles change (`package.json`, `pyproject.toml`, etc.).
 
 | URL | Service |
 |-----|---------|
@@ -69,19 +73,19 @@ docker compose up --build
 
 Env (root `.env`):
 
-- `VITE_API_BASE_URL` — browser-facing API origin (baked into web **build**)
+- `VITE_API_BASE_URL` — browser-facing API origin (used by **prod** web build; empty in `make run` — Vite proxies `/api`)
 - `DATABASE_URL` — external Postgres (`postgresql+asyncpg://…?ssl=require`); no local Postgres container
 - `REDIS_URL`, `DATA_DIR`
 - `DATABRICKS_HOST`, `DATABRICKS_TOKEN`, `DATABRICKS_AI_SEARCH_ENDPOINT`, `DATABRICKS_AI_SEARCH_INDEX` — AI Search Direct Access (optional; local chunk fallback if unset)
 - `LLM_PROVIDER` (`openai` | `anthropic`), `LLM_API_KEY`, `LLM_MODEL` — Script Writer (stub if key unset; default provider `openai` / `gpt-4o`)
 
-After changing `VITE_API_BASE_URL`, rebuild web: `docker compose up --build -d web`.
+After changing `VITE_API_BASE_URL` for **prod** web: `make prod` (or rebuild web).
 
 ## Conventions
 
 1. **No auth** — do not add Clerk/JWT/login unless explicitly requested.
 2. **No secrets in git** — never commit `.env`; use `.env.example` placeholders only.
-3. **Compose-only** — prefer documenting `docker compose` over host `uvicorn`/`npm run dev` as the happy path.
+3. **Compose-only** — prefer `make run` (hot-reload Compose) over host `uvicorn`/`npm run dev`.
 4. **DB commits** — one transaction per request at `get_db_session`; repos flush only.
 5. **Jobs** — enqueue via ARQ from services; workers live in `backend/worker` + `app/workers`.
 6. **API versioning** — product routes under `/api/v1/…`; health at `/api/health`.

@@ -37,6 +37,10 @@ class RunResponse(BaseModel):
     arq_job_id: str | None
     created_at: datetime
     updated_at: datetime
+    screenplay_preview: str | None = None
+    screenplay_md: str | None = None
+    draft_script_id: str | None = None
+    is_draft: bool = False
 
 
 class ScriptLatestResponse(BaseModel):
@@ -47,3 +51,17 @@ class ScriptLatestResponse(BaseModel):
     package: dict
     screenplay_md: str
     created_at: datetime
+
+
+class ScriptSummaryResponse(BaseModel):
+    id: str
+    project_id: str
+    run_id: str
+    version: int
+    title: str | None
+    prompt_snippet: str | None
+    created_at: datetime
+
+
+class ScriptDetailResponse(ScriptLatestResponse):
+    pass

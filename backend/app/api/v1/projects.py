@@ -2,12 +2,14 @@ from fastapi import APIRouter, Depends, File, Request, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies.db import get_db
-from app.schemas.projects.request import CreateProjectRequest, StartRunRequest
+from app.schemas.projects.request import CreateProjectRequest, SaveDraftRequest, StartRunRequest, UpdateScriptRequest
 from app.schemas.projects.response import (
     AttachmentResponse,
     ProjectResponse,
     RunResponse,
+    ScriptDetailResponse,
     ScriptLatestResponse,
+    ScriptSummaryResponse,
 )
 from app.services.projects import ProjectsService
 
@@ -83,6 +85,15 @@ async def start_run(
     return await _service(request, db).start_run(project_id, body)
 
 
+@router.get("/{project_id}/runs", response_model=list[RunResponse])
+async def list_runs(
+    project_id: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+) -> list[RunResponse]:
+    return await _service(request, db).list_runs(project_id)
+
+
 @router.get("/{project_id}/runs/{run_id}", response_model=RunResponse)
 async def get_run(
     project_id: str,
@@ -93,6 +104,17 @@ async def get_run(
     return await _service(request, db).get_run(project_id, run_id)
 
 
+@router.post("/{project_id}/runs/{run_id}/draft", response_model=ScriptDetailResponse)
+async def save_run_as_draft(
+    project_id: str,
+    run_id: str,
+    request: Request,
+    body: SaveDraftRequest = SaveDraftRequest(),
+    db: AsyncSession = Depends(get_db),
+) -> ScriptDetailResponse:
+    return await _service(request, db).save_run_as_draft(project_id, run_id, body)
+
+
 @router.get("/{project_id}/scripts/latest", response_model=ScriptLatestResponse)
 async def latest_script(
     project_id: str,
@@ -100,3 +122,33 @@ async def latest_script(
     db: AsyncSession = Depends(get_db),
 ) -> ScriptLatestResponse:
     return await _service(request, db).latest_script(project_id)
+
+
+@router.get("/{project_id}/scripts", response_model=list[ScriptSummaryResponse])
+async def list_scripts(
+    project_id: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+) -> list[ScriptSummaryResponse]:
+    return await _service(request, db).list_scripts(project_id)
+
+
+@router.get("/{project_id}/scripts/{script_id}", response_model=ScriptDetailResponse)
+async def get_script(
+    project_id: str,
+    script_id: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+) -> ScriptDetailResponse:
+    return await _service(request, db).get_script(project_id, script_id)
+
+
+@router.patch("/{project_id}/scripts/{script_id}", response_model=ScriptDetailResponse)
+async def update_script(
+    project_id: str,
+    script_id: str,
+    body: UpdateScriptRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+) -> ScriptDetailResponse:
+    return await _service(request, db).update_script(project_id, script_id, body)

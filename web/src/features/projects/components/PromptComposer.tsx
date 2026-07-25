@@ -35,14 +35,14 @@ export function PromptComposer({
   projectId,
 }: Props) {
   return (
-    <section className="rounded-lg border border-border bg-card p-5">
-      <h2 className="text-base font-semibold">Generate</h2>
-      <p className="mt-1 text-sm text-muted-foreground">
-        Describe the story you want. Context attachments are retrieved to ground the script.
+    <section className="rounded-[10px] border border-[var(--folio-border)] bg-[var(--surface-2)] p-5">
+      <h2 className="text-[14px] font-semibold text-[var(--text-primary)]">Generate</h2>
+      <p className="mt-1 text-[13px] text-[var(--text-secondary)]">
+        Describe the story you want. Context attachments ground the script.
       </p>
 
       <Textarea
-        className="mt-4 min-h-[200px]"
+        className="mt-4 min-h-[200px] text-[13px]"
         value={prompt}
         onChange={(e) => onPromptChange(e.target.value)}
         placeholder="Describe the story you want to generate…"
@@ -50,24 +50,20 @@ export function PromptComposer({
       />
 
       {warnNoContext ? (
-        <p className="mt-2 text-sm text-amber-700">
+        <p className="mt-2 text-[12px] text-amber-700">
           No indexed context yet — generation will use the prompt only.
         </p>
       ) : null}
 
       <div className="mt-4 flex flex-wrap items-center gap-3">
-        <Button
-          type="button"
-          onClick={onGenerate}
-          disabled={busy || !prompt.trim()}
-        >
+        <Button type="button" onClick={onGenerate} disabled={busy || !prompt.trim()}>
           {busy ? 'Generating…' : 'Generate'}
         </Button>
         {run ? <Badge tone={runTone(run.status)}>{run.status}</Badge> : null}
         {run?.status === 'succeeded' ? (
           <Link
             to={`/projects/${projectId}/scripts/latest`}
-            className="text-sm font-medium text-primary hover:underline"
+            className="text-[13px] font-medium text-[var(--brand)] hover:underline"
           >
             View script
           </Link>
@@ -75,7 +71,7 @@ export function PromptComposer({
       </div>
 
       {run?.error || error ? (
-        <p className="mt-3 text-sm text-destructive">{run?.error || error}</p>
+        <p className="mt-3 text-[13px] text-destructive">{run?.error || error}</p>
       ) : null}
     </section>
   )

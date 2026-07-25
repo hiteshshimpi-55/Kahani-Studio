@@ -1,5 +1,6 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Plus } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 
 import { Button } from '@/components/ui/button'
 
@@ -11,37 +12,51 @@ export function ProjectsPage() {
   const { projects, loading, error, create } = useProjects()
   const [dialogOpen, setDialogOpen] = useState(false)
   const navigate = useNavigate()
+  const [params, setParams] = useSearchParams()
+
+  useEffect(() => {
+    if (params.get('new') === '1') {
+      setDialogOpen(true)
+      const next = new URLSearchParams(params)
+      next.delete('new')
+      setParams(next, { replace: true })
+    }
+  }, [params, setParams])
 
   return (
-    <main className="mx-auto max-w-6xl px-6 py-10">
+    <div className="mx-auto max-w-6xl">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Projects</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Create a project, attach context, and generate audio scripts.
+          <h1 className="text-[22px] font-semibold tracking-tight text-[var(--text-primary)]">
+            Projects
+          </h1>
+          <p className="mt-1 text-[13px] text-[var(--text-secondary)]">
+            Open a project chat to prompt the Script Writer agent.
           </p>
         </div>
         <Button type="button" onClick={() => setDialogOpen(true)}>
+          <Plus className="h-4 w-4 stroke-[1.75]" />
           New project
         </Button>
       </div>
 
-      {error ? <p className="mt-6 text-sm text-destructive">{error}</p> : null}
+      {error ? <p className="mt-6 text-[13px] text-destructive">{error}</p> : null}
 
       {loading ? (
-        <p className="mt-10 text-sm text-muted-foreground">Loading projects…</p>
+        <p className="mt-10 text-[13px] text-[var(--text-secondary)]">Loading projects…</p>
       ) : projects.length === 0 ? (
         <div className="mt-16 flex flex-col items-center text-center">
-          <p className="text-base font-medium text-foreground">No projects yet</p>
-          <p className="mt-1 max-w-sm text-sm text-muted-foreground">
-            Start with a name and description. You can upload source notes on the next screen.
+          <p className="text-[15px] font-semibold text-[var(--text-primary)]">No projects yet</p>
+          <p className="mt-1 max-w-sm text-[13px] text-[var(--text-secondary)]">
+            Create a project, then chat with the agent to generate scripts.
           </p>
           <Button type="button" className="mt-6" onClick={() => setDialogOpen(true)}>
+            <Plus className="h-4 w-4 stroke-[1.75]" />
             Create your first project
           </Button>
         </div>
       ) : (
-        <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {projects.map((p) => (
             <ProjectCard key={p.id} project={p} />
           ))}
@@ -53,10 +68,10 @@ export function ProjectsPage() {
         onClose={() => setDialogOpen(false)}
         onCreate={async (input) => {
           const project = await create(input)
-          navigate(`/projects/${project.id}`)
+          navigate(`/projects/${project.id}/chat`)
           return project
         }}
       />
-    </main>
+    </div>
   )
 }

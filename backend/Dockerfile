@@ -10,7 +10,7 @@ COPY pyproject.toml ./
 COPY app ./app
 COPY worker ./worker
 
-RUN pip install --no-cache-dir .
+RUN pip install --no-cache-dir -e .
 
 ENV PYTHONUNBUFFERED=1
 ENV DATA_DIR=/data

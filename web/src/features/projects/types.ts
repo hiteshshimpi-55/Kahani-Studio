@@ -30,6 +30,10 @@ export interface ProjectRun {
   arq_job_id: string | null
   created_at: string
   updated_at: string
+  screenplay_preview?: string | null
+  screenplay_md?: string | null
+  draft_script_id?: string | null
+  is_draft?: boolean
 }
 
 export interface ScriptLatest {
@@ -39,6 +43,16 @@ export interface ScriptLatest {
   version: number
   package: Record<string, unknown>
   screenplay_md: string
+  created_at: string
+}
+
+export interface ScriptSummary {
+  id: string
+  project_id: string
+  run_id: string
+  version: number
+  title: string | null
+  prompt_snippet: string | null
   created_at: string
 }
 

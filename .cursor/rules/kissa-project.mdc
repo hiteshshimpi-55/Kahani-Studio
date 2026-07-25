@@ -9,5 +9,6 @@ alwaysApply: true
 - Run with **Docker Compose only** (`web`, `api`, `worker`, `redis`). No local Postgres — use `DATABASE_URL` in root `.env`
 - **No auth** unless explicitly requested
 - Never commit `.env` or secrets; update `.env.example` with placeholders only
-- Frontend API base: `VITE_API_BASE_URL` (rebuild web after changes)
+- Frontend API base: `VITE_API_BASE_URL` (prod web build only; `make run` proxies `/api`)
+- Dev: `make run` hot-reloads FE/BE — no rebuild for normal source edits
 - Full context: `CLAUDE.md`

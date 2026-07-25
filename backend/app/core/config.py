@@ -21,7 +21,7 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    app_name: str = "kissa"
+    app_name: str = "kahani"
     api_prefix: str = "/api"
     debug: bool = False
 

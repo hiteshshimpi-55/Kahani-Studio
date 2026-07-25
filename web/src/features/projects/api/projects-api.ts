@@ -6,6 +6,7 @@ import type {
   ProjectAttachment,
   ProjectRun,
   ScriptLatest,
+  ScriptSummary,
   StartRunInput,
 } from '../types'
 
@@ -71,12 +72,53 @@ export async function startRun(
   return parseJson(res)
 }
 
+export async function listRuns(projectId: string): Promise<ProjectRun[]> {
+  const res = await fetch(apiUrl(`/api/v1/projects/${projectId}/runs`))
+  return parseJson(res)
+}
+
 export async function getRun(projectId: string, runId: string): Promise<ProjectRun> {
   const res = await fetch(apiUrl(`/api/v1/projects/${projectId}/runs/${runId}`))
   return parseJson(res)
 }
 
+export async function saveRunAsDraft(
+  projectId: string,
+  runId: string,
+  screenplay_md?: string,
+): Promise<ScriptLatest> {
+  const res = await fetch(apiUrl(`/api/v1/projects/${projectId}/runs/${runId}/draft`), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(screenplay_md != null ? { screenplay_md } : {}),
+  })
+  return parseJson(res)
+}
+
 export async function getLatestScript(projectId: string): Promise<ScriptLatest> {
   const res = await fetch(apiUrl(`/api/v1/projects/${projectId}/scripts/latest`))
+  return parseJson(res)
+}
+
+export async function listScripts(projectId: string): Promise<ScriptSummary[]> {
+  const res = await fetch(apiUrl(`/api/v1/projects/${projectId}/scripts`))
+  return parseJson(res)
+}
+
+export async function getScript(projectId: string, scriptId: string): Promise<ScriptLatest> {
+  const res = await fetch(apiUrl(`/api/v1/projects/${projectId}/scripts/${scriptId}`))
+  return parseJson(res)
+}
+
+export async function updateScript(
+  projectId: string,
+  scriptId: string,
+  screenplay_md: string,
+): Promise<ScriptLatest> {
+  const res = await fetch(apiUrl(`/api/v1/projects/${projectId}/scripts/${scriptId}`), {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ screenplay_md }),
+  })
   return parseJson(res)
 }
