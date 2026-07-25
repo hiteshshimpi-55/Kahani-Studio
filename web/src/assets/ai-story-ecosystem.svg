@@ -1,0 +1,26 @@
+<svg width="720" height="480" viewBox="0 0 720 480" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="720" height="480" rx="36" fill="#0B1020"/>
+  <rect x="42" y="40" width="636" height="400" rx="30" fill="url(#eco)"/>
+  <circle cx="208" cy="182" r="96" fill="#F59E0B" fill-opacity="0.16"/>
+  <circle cx="526" cy="176" r="112" fill="#7C3AED" fill-opacity="0.16"/>
+  <rect x="132" y="112" width="184" height="148" rx="24" fill="#101828" stroke="#F8FAFC" stroke-opacity="0.2"/>
+  <path d="M170 154H256" stroke="#F8FAFC" stroke-opacity="0.7" stroke-width="10" stroke-linecap="round"/>
+  <path d="M170 182H236" stroke="#F8FAFC" stroke-opacity="0.38" stroke-width="10" stroke-linecap="round"/>
+  <path d="M170 208H216" stroke="#F8FAFC" stroke-opacity="0.28" stroke-width="10" stroke-linecap="round"/>
+  <rect x="358" y="92" width="210" height="212" rx="24" fill="#111827" fill-opacity="0.92" stroke="#F8FAFC" stroke-opacity="0.18"/>
+  <rect x="388" y="126" width="152" height="44" rx="14" fill="#F8FAFC" fill-opacity="0.14"/>
+  <path d="M398 188H508" stroke="#F59E0B" stroke-width="12" stroke-linecap="round"/>
+  <path d="M398 214H478" stroke="#F8FAFC" stroke-opacity="0.42" stroke-width="10" stroke-linecap="round"/>
+  <path d="M398 238H448" stroke="#F8FAFC" stroke-opacity="0.28" stroke-width="10" stroke-linecap="round"/>
+  <rect x="206" y="304" width="308" height="84" rx="24" fill="#0F172A" fill-opacity="0.94" stroke="#F8FAFC" stroke-opacity="0.16"/>
+  <path d="M254 338C254 316.461 271.461 299 293 299H355C376.539 299 394 316.461 394 338V346H254V338Z" fill="#7C3AED" fill-opacity="0.82"/>
+  <path d="M236 354H452" stroke="#F8FAFC" stroke-opacity="0.42" stroke-width="10" stroke-linecap="round"/>
+  <circle cx="576" cy="340" r="12" fill="#F8FAFC" fill-opacity="0.8"/>
+  <circle cx="164" cy="330" r="8" fill="#F59E0B"/>
+  <defs>
+    <linearGradient id="eco" x1="72" y1="56" x2="652" y2="424" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1F2937"/>
+      <stop offset="1" stop-color="#111827"/>
+    </linearGradient>
+  </defs>
+</svg>

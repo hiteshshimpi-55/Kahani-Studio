@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 
 import { Button } from '@/components/ui/button'
+import { StudioVisuals } from '@/components/ui/StudioVisuals'
 
 import { CreateProjectDialog } from '../components/CreateProjectDialog'
 import { ProjectCard } from '../components/ProjectCard'
@@ -41,6 +42,25 @@ export function ProjectsPage() {
       </div>
 
       {error ? <p className="mt-6 text-[13px] text-destructive">{error}</p> : null}
+
+      <div className="mt-8 rounded-[18px] border border-[var(--folio-border)] bg-[linear-gradient(135deg,var(--surface-2),var(--surface-1))] p-4 shadow-[0_10px_30px_rgba(15,23,42,0.08)]">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-[var(--brand)]">
+              AI story studio
+            </p>
+            <h2 className="mt-1 text-[16px] font-semibold text-[var(--text-primary)]">
+              Build immersive story worlds in one place
+            </h2>
+          </div>
+          <p className="max-w-[360px] text-[12px] leading-5 text-[var(--text-secondary)]">
+            Prompt the script writer, add context, and shape visuals for the next binge-worthy release.
+          </p>
+        </div>
+        <div className="mt-4">
+          <StudioVisuals />
+        </div>
+      </div>
 
       {loading ? (
         <p className="mt-10 text-[13px] text-[var(--text-secondary)]">Loading projects…</p>
