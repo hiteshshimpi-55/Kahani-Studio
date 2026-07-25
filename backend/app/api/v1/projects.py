@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, File, Query, Request, UploadFile
+from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sse_starlette.sse import EventSourceResponse
 
@@ -6,6 +7,7 @@ from app.api.dependencies.db import get_db
 from app.schemas.projects.request import (
     ChatMessageRequest,
     CreateProjectRequest,
+    GenerateScriptAudioRequest,
     SaveDraftRequest,
     StartRunRequest,
     UpdateScriptRequest,
@@ -17,6 +19,7 @@ from app.schemas.projects.response import (
     ChatSessionResponse,
     ProjectResponse,
     RunResponse,
+    ScriptAudioStatusResponse,
     ScriptDetailResponse,
     ScriptLatestResponse,
     ScriptSummaryResponse,
@@ -247,6 +250,45 @@ async def update_script(
     db: AsyncSession = Depends(get_db),
 ) -> ScriptDetailResponse:
     return await _service(request, db).update_script(project_id, script_id, body)
+
+
+@router.post(
+    "/{project_id}/scripts/{script_id}/audio",
+    response_model=ScriptAudioStatusResponse,
+)
+async def generate_script_audio(
+    project_id: str,
+    script_id: str,
+    request: Request,
+    body: GenerateScriptAudioRequest = GenerateScriptAudioRequest(),
+    db: AsyncSession = Depends(get_db),
+) -> ScriptAudioStatusResponse:
+    """Enqueue ElevenLabs audiobook render for a saved draft."""
+    return await _service(request, db).enqueue_script_audio(project_id, script_id, body)
+
+
+@router.get(
+    "/{project_id}/scripts/{script_id}/audio",
+    response_model=ScriptAudioStatusResponse,
+)
+async def get_script_audio_status(
+    project_id: str,
+    script_id: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+) -> ScriptAudioStatusResponse:
+    return await _service(request, db).get_script_audio_status(project_id, script_id)
+
+
+@router.get("/{project_id}/scripts/{script_id}/audio/file")
+async def get_script_audio_file(
+    project_id: str,
+    script_id: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+) -> FileResponse:
+    path = await _service(request, db).get_script_audio_file_path(project_id, script_id)
+    return FileResponse(path, media_type="audio/mpeg", filename="episode.mp3")
 
 
 @router.post("/{project_id}/runs/{run_id}/story-analysis", response_model=StoryAnalysisResponse)

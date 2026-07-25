@@ -24,6 +24,7 @@ from app.repository.projects import (
 from app.schemas.projects.request import (
     ChatMessageRequest,
     CreateProjectRequest,
+    GenerateScriptAudioRequest,
     SaveDraftRequest,
     StartRunRequest,
     UpdateScriptRequest,
@@ -35,14 +36,21 @@ from app.schemas.projects.response import (
     ChatSessionResponse,
     ProjectResponse,
     RunResponse,
+    ScriptAudioStatusResponse,
     ScriptDetailResponse,
     ScriptLatestResponse,
     ScriptSummaryResponse,
 )
 from app.services.chat.checkpoint_history import build_session_chat_history
 from app.services.chat.orchestrator import analyze_user_message
+from app.integrations.s3 import get_artifact_storage
+from app.services.projects.audio import (
+    audio_file_path,
+    read_audio_status,
+    write_audio_status,
+)
 from app.services.projects.storage import (
-    attachment_storage_path,
+    attachment_object_key,
     checksum_bytes,
     is_allowed_filename,
     read_run_package,
@@ -50,7 +58,6 @@ from app.services.projects.storage import (
     run_screenplay_path,
     runs_dir,
 )
-
 logger = logging.getLogger(__name__)
 
 DEFAULT_NARRATION = {
@@ -172,9 +179,13 @@ class ProjectsService:
             index_status="pending",
         )
         attachment = await self._attachments.create(attachment)
-        path = attachment_storage_path(project_id, attachment.id, filename)
-        path.write_bytes(data)
-        attachment.storage_path = str(path)
+        key = attachment_object_key(project_id, attachment.id, filename)
+        get_artifact_storage().put_bytes(
+            key,
+            data,
+            content_type=file.content_type or "text/plain",
+        )
+        attachment.storage_path = key
         await self._session.flush()
         await self._session.refresh(attachment)
 
@@ -196,7 +207,6 @@ class ProjectsService:
         if not row or row.project_id != project_id:
             raise AppError(code="NOT_FOUND", message="Attachment not found", http_status_code=404)
 
-        path = Path(row.storage_path)
         if self._redis is not None:
             try:
                 await self._redis.enqueue_job(
@@ -207,8 +217,11 @@ class ProjectsService:
             except Exception:
                 logger.exception("Failed to enqueue delete_attachment_index_job")
 
-        if path.exists():
-            path.unlink()
+        if row.storage_path:
+            try:
+                get_artifact_storage().delete(row.storage_path)
+            except Exception:
+                logger.exception("Failed to delete attachment object %s", row.storage_path)
         await self._attachments.delete(row)
 
     async def start_run(self, project_id: str, body: StartRunRequest) -> RunResponse:
@@ -353,6 +366,123 @@ class ProjectsService:
 
         return ScriptDetailResponse(**(await self._script_detail(script)).model_dump())
 
+    def _audio_status_response(
+        self, script: Script, raw: dict | None
+    ) -> ScriptAudioStatusResponse:
+        if not raw:
+            return ScriptAudioStatusResponse(
+                script_id=script.id,
+                project_id=script.project_id,
+                status="idle",
+            )
+        return ScriptAudioStatusResponse(
+            script_id=script.id,
+            project_id=script.project_id,
+            status=str(raw.get("status") or "idle"),
+            error=raw.get("error"),
+            audio_url=raw.get("audio_url"),
+            voice_provider=raw.get("voice_provider"),
+            line_count=raw.get("line_count"),
+            sfx_clip_count=raw.get("sfx_clip_count"),
+            title=raw.get("title"),
+            updated_at=raw.get("updated_at"),
+        )
+
+    async def enqueue_script_audio(
+        self,
+        project_id: str,
+        script_id: str,
+        body: GenerateScriptAudioRequest | None = None,
+    ) -> ScriptAudioStatusResponse:
+        await self._require_project(project_id)
+        script = await self._scripts.get(script_id)
+        if not script or script.project_id != project_id:
+            raise AppError(code="NOT_FOUND", message="Script not found", http_status_code=404)
+
+        opts = body or GenerateScriptAudioRequest()
+        provider = (opts.voice_provider or settings.tts_provider or "elevenlabs").strip().lower()
+        if provider == "elevenlabs" and not (settings.elevenlabs_api_key or "").strip():
+            raise AppError(
+                code="VALIDATION_ERROR",
+                message="ELEVENLABS_API_KEY is not set — add it to .env and restart",
+                http_status_code=400,
+            )
+        if provider == "sarvam" and not (settings.sarvam_api_key or "").strip():
+            raise AppError(
+                code="VALIDATION_ERROR",
+                message="SARVAM_API_KEY is not set — add it to .env and restart",
+                http_status_code=400,
+            )
+
+        current = read_audio_status(script.storage_dir)
+        if current and current.get("status") in ("queued", "running"):
+            return self._audio_status_response(script, current)
+
+        if self._redis is None:
+            raise AppError(
+                code="INTERNAL_ERROR",
+                message="Redis unavailable — cannot enqueue audio job",
+                http_status_code=503,
+            )
+
+        status = write_audio_status(
+            script.storage_dir,
+            {
+                "status": "queued",
+                "error": None,
+                "audio_url": None,
+                "voice_provider": provider,
+                "project_id": project_id,
+                "script_id": script_id,
+            },
+        )
+        await self._session.commit()
+
+        job = await self._redis.enqueue_job(
+            "script_audio_job",
+            project_id=project_id,
+            script_id=script_id,
+            max_sec=float(opts.max_sec),
+            voice_provider=provider,
+            with_sfx=bool(opts.with_sfx),
+            with_bed=bool(opts.with_bed),
+        )
+        job_id = getattr(job, "job_id", None) or str(job)
+        status = write_audio_status(
+            script.storage_dir,
+            {**status, "status": "queued", "arq_job_id": job_id},
+        )
+        return self._audio_status_response(script, status)
+
+    async def get_script_audio_status(
+        self, project_id: str, script_id: str
+    ) -> ScriptAudioStatusResponse:
+        await self._require_project(project_id)
+        script = await self._scripts.get(script_id)
+        if not script or script.project_id != project_id:
+            raise AppError(code="NOT_FOUND", message="Script not found", http_status_code=404)
+        raw = read_audio_status(script.storage_dir)
+        # Heal URL if file exists but status missing url
+        if raw and raw.get("status") == "succeeded" and not raw.get("audio_url"):
+            if audio_file_path(script.storage_dir).is_file():
+                raw = write_audio_status(
+                    script.storage_dir,
+                    {
+                        **raw,
+                        "audio_url": f"/api/v1/projects/{project_id}/scripts/{script_id}/audio/file",
+                    },
+                )
+        return self._audio_status_response(script, raw)
+
+    async def get_script_audio_file_path(self, project_id: str, script_id: str) -> Path:
+        await self._require_project(project_id)
+        script = await self._scripts.get(script_id)
+        if not script or script.project_id != project_id:
+            raise AppError(code="NOT_FOUND", message="Script not found", http_status_code=404)
+        path = audio_file_path(script.storage_dir)
+        if not path.is_file():
+            raise AppError(code="NOT_FOUND", message="Audio not ready", http_status_code=404)
+        return path
 
     async def post_chat_message(
         self, project_id: str, body: ChatMessageRequest

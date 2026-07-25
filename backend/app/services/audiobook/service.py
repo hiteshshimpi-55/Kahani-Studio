@@ -1082,9 +1082,10 @@ class AudiobookService:
                 [c.id for c in cast_script.characters],
                 len(cast_map),
             )
-        except Exception:
-            log.exception(
-                "cast_search_failed provider=%s — falling back to local pool",
+        except Exception as exc:
+            log.warning(
+                "cast_search_unavailable (%s) — using local %s voice pool",
+                exc,
                 locked_provider,
             )
 

@@ -9,6 +9,7 @@ from pathlib import Path
 from app.agents.graph.graph import RunCancelled, run_project_graph_cancellable
 from app.core.db.session import AsyncSessionLocal
 from app.integrations.databricks_ai_search import AISearchClient
+from app.integrations.s3 import get_artifact_storage
 from app.repository.projects import AttachmentRepository, RunRepository
 from app.services.projects.chunking import chunk_text
 from app.services.projects.storage import runs_dir
@@ -23,7 +24,7 @@ async def index_attachment_job(ctx: dict, project_id: str, attachment_id: str) -
         if not row or row.project_id != project_id:
             return {"ok": False, "error": "attachment not found"}
         try:
-            text = Path(row.storage_path).read_text(encoding="utf-8", errors="ignore")
+            text = get_artifact_storage().get_text(row.storage_path)
             chunks = chunk_text(text)
             client = AISearchClient()
             client.upsert_chunks(
@@ -141,3 +142,58 @@ async def project_run_job(ctx: dict, project_id: str, run_id: str) -> dict:
                 await runs2.update_status(run_id, status="failed", error=str(exc)[:2000])
                 await session2.commit()
             return {"ok": False, "error": str(exc)}
+
+
+async def script_audio_job(
+    ctx: dict,
+    *,
+    project_id: str,
+    script_id: str,
+    max_sec: float = 300.0,
+    voice_provider: str = "elevenlabs",
+    with_sfx: bool = True,
+    with_bed: bool = True,
+) -> dict:
+    """Render draft screenplay to MP3 via ElevenLabs audiobook pipeline."""
+    import asyncio
+    from pathlib import Path
+
+    from app.repository.projects import ScriptRepository
+    from app.services.projects.audio import render_script_audio, write_audio_status
+
+    async with AsyncSessionLocal() as session:
+        scripts = ScriptRepository(session)
+        script = await scripts.get(script_id)
+        if not script or script.project_id != project_id:
+            return {"ok": False, "error": "script not found"}
+
+        screenplay = ""
+        path = Path(script.screenplay_path)
+        if path.is_file():
+            screenplay = path.read_text(encoding="utf-8")
+        if not screenplay.strip():
+            status = write_audio_status(
+                script.storage_dir,
+                {
+                    "status": "failed",
+                    "error": "Screenplay is empty",
+                    "project_id": project_id,
+                    "script_id": script_id,
+                    "voice_provider": voice_provider,
+                },
+            )
+            return {"ok": False, **status}
+
+        status = await asyncio.to_thread(
+            render_script_audio,
+            project_id=project_id,
+            script_id=script_id,
+            storage_dir=script.storage_dir,
+            package=script.package_json or {},
+            screenplay_md=screenplay,
+            max_sec=float(max_sec),
+            voice_provider=voice_provider,
+            with_sfx=with_sfx,
+            with_bed=with_bed,
+        )
+        return {"ok": status.get("status") == "succeeded", **status}

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 
+import { ListingEmptyState, ListingShell, PageHeader } from '@/components/layout/PageHeader'
 import { KissaLoader } from '@/components/ui/kissa-loader'
 import { getScript, listScripts } from '@/features/projects/api/projects-api'
 import { useProject } from '@/features/projects/hooks/use-project'
@@ -83,32 +84,32 @@ export function ProjectDraftsPage() {
   }
 
   return (
-    <div className="mx-auto max-w-5xl">
-      <p className="text-[12px] text-[var(--text-secondary)]">
-        <Link to={`/projects/${project.id}/chat`} className="hover:text-[var(--brand)]">
-          {project.name}
-        </Link>
-      </p>
-      <h1 className="mt-1 text-[22px] font-semibold tracking-tight">Drafts</h1>
-      <p className="mt-1 text-[13px] text-[var(--text-secondary)]">
-        Versioned scripts from agent runs. Chat stays one thread — each Generate adds a draft.
-      </p>
+    <ListingShell maxWidth="5xl">
+      <PageHeader
+        title="Drafts"
+        description="Versioned scripts from agent runs. Chat stays one thread — each Generate adds a draft."
+        breadcrumb={
+          <Link to={`/projects/${project.id}/chat`} className="hover:text-[var(--brand)]">
+            {project.name}
+          </Link>
+        }
+      />
 
       {drafts.length === 0 ? (
-        <div className="mt-10 rounded-[10px] border border-[var(--folio-border)] bg-[var(--surface-0)] p-8 text-center">
-          <p className="text-[14px] font-medium">No drafts yet</p>
-          <p className="mt-1 text-[13px] text-[var(--text-secondary)]">
-            {listError || 'Generate a script in chat — each run becomes a versioned draft.'}
-          </p>
-          <Link
-            to={`/projects/${project.id}/chat`}
-            className="mt-3 inline-block text-[13px] font-medium text-[var(--brand)] hover:underline"
-          >
-            Generate in chat
-          </Link>
-        </div>
+        <ListingEmptyState
+          title="No drafts yet"
+          description={listError || 'Generate a script in chat — each run becomes a versioned draft.'}
+          action={
+            <Link
+              to={`/projects/${project.id}/chat`}
+              className="text-[13px] font-medium text-[var(--brand)] hover:underline"
+            >
+              Generate in chat
+            </Link>
+          }
+        />
       ) : (
-        <div className="mt-6 grid gap-4 lg:grid-cols-[240px_minmax(0,1fr)]">
+        <div className="grid gap-4 lg:grid-cols-[240px_minmax(0,1fr)]">
           <aside className="space-y-1">
             {drafts.map((d) => {
               const active = selected?.id === d.id
@@ -184,6 +185,6 @@ export function ProjectDraftsPage() {
           </section>
         </div>
       )}
-    </div>
+    </ListingShell>
   )
 }

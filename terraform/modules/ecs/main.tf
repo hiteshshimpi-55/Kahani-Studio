@@ -24,6 +24,64 @@ variable "worker_desired_count" { type = number }
 locals {
   name  = "${var.project_name}-${var.environment}"
   image = "${var.ecr_repository_url}:${var.image_tag}"
+
+  # All app runtime config comes from Secrets Manager (synced from root .env).
+  # Infra-managed keys are seeded here and protected by sync-app-secrets.sh.
+  app_secret_keys = [
+    "DATABASE_URL",
+    "REDIS_URL",
+    "DATA_DIR",
+    "ARTIFACTS_BUCKET",
+    "ALLOWED_ORIGINS",
+    "LLM_PROVIDER",
+    "LLM_API_KEY",
+    "LLM_MODEL",
+    "TTS_PROVIDER",
+    "ELEVENLABS_API_KEY",
+    "ELEVENLABS_DEFAULT_MODEL_ID",
+    "ELEVENLABS_DEFAULT_OUTPUT_FORMAT",
+    "DATABRICKS_HOST",
+    "DATABRICKS_TOKEN",
+    "DATABRICKS_VECTOR_SEARCH_ENDPOINT",
+    "DATABRICKS_VECTOR_SEARCH_INDEX",
+    "DATABRICKS_VECTOR_SEARCH_COLUMNS",
+    "DATABRICKS_CATALOG",
+    "DATABRICKS_SCHEMA",
+    "DATABRICKS_CAST_TABLE",
+    "DATABRICKS_EMBEDDING_ENDPOINT",
+  ]
+
+  app_secrets = [
+    for key in local.app_secret_keys : {
+      name      = key
+      valueFrom = "${aws_secretsmanager_secret.app.arn}:${key}::"
+    }
+  ]
+
+  # Seed only — real values managed by sync-app-secrets.sh / Console.
+  app_secret_seed = {
+    DATABASE_URL                       = var.database_url
+    REDIS_URL                          = var.redis_url
+    DATA_DIR                           = "/data"
+    ARTIFACTS_BUCKET                   = var.artifacts_bucket
+    ALLOWED_ORIGINS                    = var.allowed_origins
+    LLM_PROVIDER                       = "openai"
+    LLM_API_KEY                        = ""
+    LLM_MODEL                          = "gpt-4o"
+    TTS_PROVIDER                       = "elevenlabs"
+    ELEVENLABS_API_KEY                 = ""
+    ELEVENLABS_DEFAULT_MODEL_ID        = "eleven_v3"
+    ELEVENLABS_DEFAULT_OUTPUT_FORMAT   = "mp3_44100_128"
+    DATABRICKS_HOST                    = ""
+    DATABRICKS_TOKEN                   = ""
+    DATABRICKS_VECTOR_SEARCH_ENDPOINT  = "kissa-vector-search"
+    DATABRICKS_VECTOR_SEARCH_INDEX     = "workspace.kissa.cast_assets_index"
+    DATABRICKS_VECTOR_SEARCH_COLUMNS   = "id,asset_type,provider_id,name,language,gender,description,preview_url,free_users_allowed"
+    DATABRICKS_CATALOG                 = "workspace"
+    DATABRICKS_SCHEMA                  = "kissa"
+    DATABRICKS_CAST_TABLE              = "cast_assets"
+    DATABRICKS_EMBEDDING_ENDPOINT      = "databricks-qwen3-embedding-0-6b"
+  }
 }
 
 resource "aws_cloudwatch_log_group" "api" {
@@ -42,12 +100,12 @@ resource "aws_secretsmanager_secret" "app" {
 }
 
 resource "aws_secretsmanager_secret_version" "app" {
-  secret_id = aws_secretsmanager_secret.app.id
-  secret_string = jsonencode({
-    LLM_API_KEY        = ""
-    ELEVENLABS_API_KEY = ""
-    DATABASE_URL       = var.database_url
-  })
+  secret_id     = aws_secretsmanager_secret.app.id
+  secret_string = jsonencode(local.app_secret_seed)
+
+  lifecycle {
+    ignore_changes = [secret_string]
+  }
 }
 
 resource "aws_iam_role" "execution" {
@@ -135,26 +193,8 @@ resource "aws_ecs_task_definition" "api" {
       containerPort = 8000
       protocol      = "tcp"
     }]
-    environment = [
-      { name = "REDIS_URL", value = var.redis_url },
-      { name = "DATA_DIR", value = "/data" },
-      { name = "ARTIFACTS_BUCKET", value = var.artifacts_bucket },
-      { name = "ALLOWED_ORIGINS", value = var.allowed_origins },
-    ]
-    secrets = [
-      {
-        name      = "DATABASE_URL"
-        valueFrom = "${aws_secretsmanager_secret.app.arn}:DATABASE_URL::"
-      },
-      {
-        name      = "LLM_API_KEY"
-        valueFrom = "${aws_secretsmanager_secret.app.arn}:LLM_API_KEY::"
-      },
-      {
-        name      = "ELEVENLABS_API_KEY"
-        valueFrom = "${aws_secretsmanager_secret.app.arn}:ELEVENLABS_API_KEY::"
-      },
-    ]
+    environment = []
+    secrets     = local.app_secrets
     logConfiguration = {
       logDriver = "awslogs"
       options = {
@@ -180,25 +220,8 @@ resource "aws_ecs_task_definition" "worker" {
     image     = local.image
     essential = true
     command   = ["arq", "worker.settings.WorkerSettings"]
-    environment = [
-      { name = "REDIS_URL", value = var.redis_url },
-      { name = "DATA_DIR", value = "/data" },
-      { name = "ARTIFACTS_BUCKET", value = var.artifacts_bucket },
-    ]
-    secrets = [
-      {
-        name      = "DATABASE_URL"
-        valueFrom = "${aws_secretsmanager_secret.app.arn}:DATABASE_URL::"
-      },
-      {
-        name      = "LLM_API_KEY"
-        valueFrom = "${aws_secretsmanager_secret.app.arn}:LLM_API_KEY::"
-      },
-      {
-        name      = "ELEVENLABS_API_KEY"
-        valueFrom = "${aws_secretsmanager_secret.app.arn}:ELEVENLABS_API_KEY::"
-      },
-    ]
+    environment = []
+    secrets     = local.app_secrets
     logConfiguration = {
       logDriver = "awslogs"
       options = {
@@ -272,6 +295,14 @@ output "worker_service_name" {
 
 output "app_secret_arn" {
   value = aws_secretsmanager_secret.app.arn
+}
+
+output "api_task_definition_arn" {
+  value = aws_ecs_task_definition.api.arn
+}
+
+output "worker_task_definition_arn" {
+  value = aws_ecs_task_definition.worker.arn
 }
 
 output "api_task_definition_family" {

@@ -79,6 +79,19 @@ class ScriptDetailResponse(ScriptLatestResponse):
     pass
 
 
+class ScriptAudioStatusResponse(BaseModel):
+    script_id: str
+    project_id: str
+    status: str  # idle | queued | running | succeeded | failed
+    error: str | None = None
+    audio_url: str | None = None
+    voice_provider: str | None = None
+    line_count: int | None = None
+    sfx_clip_count: int | None = None
+    title: str | None = None
+    updated_at: str | None = None
+
+
 class ChatMessageResponse(BaseModel):
     id: str
     role: str
@@ -91,6 +104,12 @@ class ChatMessageResponse(BaseModel):
     run: RunResponse | None = None
 
 
+class PlotPitchItem(BaseModel):
+    title: str
+    logline: str
+    tone: str = ""
+
+
 class ChatHistoryItem(BaseModel):
     id: str
     role: str
@@ -99,6 +118,7 @@ class ChatHistoryItem(BaseModel):
     created_at: datetime
     run_id: str | None = None
     questions: list[str] = []
+    plot_pitches: list[PlotPitchItem] = []
     script_preview: str | None = None
     draft_script_id: str | None = None
     is_draft: bool = False

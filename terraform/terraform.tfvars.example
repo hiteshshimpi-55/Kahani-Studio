@@ -8,8 +8,12 @@ enable_https = false
 web_origins = [
   "https://uselamp.app",
   "https://www.uselamp.app",
+  "https://kahani-studio-three.vercel.app",
 ]
 
 # GitHub org/user + repo for Actions OIDC deploy role
 github_org  = "YOUR_GITHUB_ORG_OR_USER"
 github_repo = "Kissa"
+
+# App runtime env (LLM / TTS / Databricks / keys) → Secrets Manager via:
+#   ./scripts/sync-app-secrets.sh

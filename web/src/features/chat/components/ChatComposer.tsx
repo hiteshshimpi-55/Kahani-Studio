@@ -1,6 +1,7 @@
-import { ArrowUp, LoaderCircle, Paperclip, Square } from 'lucide-react'
+import { ArrowUp, Square } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react'
 
+import { AddAssetMenu } from '@/components/AddAssetMenu'
 import { cn } from '@/lib/utils'
 
 type Props = {
@@ -26,7 +27,6 @@ export function ChatComposer({
 }: Props) {
   const [value, setValue] = useState('')
   const textareaRef = useRef<HTMLTextAreaElement>(null)
-  const fileRef = useRef<HTMLInputElement>(null)
   const hero = variant === 'hero'
 
   const resize = useCallback(() => {
@@ -80,30 +80,27 @@ export function ChatComposer({
       />
       <div className="mt-1 flex items-center justify-between gap-2 px-1">
         <div className="flex items-center gap-1">
-          <input
-            ref={fileRef}
-            type="file"
-            className="sr-only"
-            accept=".md,.txt,.markdown,text/plain,text/markdown"
-            onChange={(e) => {
-              const file = e.target.files?.[0]
-              if (file && onAttach) void onAttach(file)
-              e.target.value = ''
-            }}
-          />
-          <button
-            type="button"
-            title="Attach context file"
-            disabled={!onAttach || isUploading || isStreaming}
-            onClick={() => fileRef.current?.click()}
-            className="flex h-9 w-9 items-center justify-center rounded-full text-[var(--text-secondary)] transition-colors hover:bg-[var(--surface-1)] hover:text-[var(--text-primary)] disabled:opacity-40"
-          >
-            {isUploading ? (
-              <LoaderCircle className="h-4 w-4 animate-spin" />
-            ) : (
-              <Paperclip className="h-4 w-4 stroke-[1.75]" />
-            )}
-          </button>
+          {onAttach ? (
+            <AddAssetMenu
+              variant="icon"
+              label="Add"
+              align="left"
+              loading={isUploading}
+              disabled={isStreaming}
+              actions={[
+                {
+                  kind: 'context',
+                  label: 'Add context',
+                  accept: '.md,.txt,.markdown,text/plain,text/markdown',
+                  hint: '.md or .txt brief for RAG',
+                  onFiles: async (files) => {
+                    const file = files[0]
+                    if (file) await onAttach(file)
+                  },
+                },
+              ]}
+            />
+          ) : null}
         </div>
 
         {isStreaming ? (
