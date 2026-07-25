@@ -1,0 +1,54 @@
+{
+  "title": "महात्मा गांधी का दांडी मार्च — Part 2: सत्याग्रह की शुरुआत",
+  "language": "hi",
+  "narration_config": {
+    "pov": "third_limited",
+    "cast_model": "multicast",
+    "platform_style": "pocket_fm_serial",
+    "soundscape": true,
+    "narrators": [{"id": "NARRATOR", "voice_notes": "calm Hindi narrator male"}]
+  },
+  "bible": {
+    "characters": [
+      {
+        "id": "narrator",
+        "name": "NARRATOR",
+        "role": "guide",
+        "voice": "calm male narrator, measured pace, Hindi storyteller",
+        "speech_patterns": "calm, guiding, observational",
+        "arc": "guides through historical events"
+      },
+      {
+        "id": "gandhi",
+        "name": "GANDHI",
+        "role": "protagonist",
+        "voice": "elderly wise male, deep commanding, slow measured cadence",
+        "speech_patterns": "wise, inspirational, firm conviction",
+        "arc": "leads the salt march"
+      },
+      {
+        "id": "suresh",
+        "name": "SURESH",
+        "role": "ally",
+        "voice": "young enthusiastic male, energetic, eager",
+        "speech_patterns": "enthusiastic, passionate",
+        "arc": "youth joining the movement"
+      }
+    ]
+  },
+  "parts": [
+    {
+      "part_number": 2,
+      "title": "सत्याग्रह की शुरुआत",
+      "target_duration_sec": 30,
+      "screenplay": "NARRATOR: [calm] यह 1930 का भारत है। महात्मा गांधी ने दांडी मार्च की शुरुआत की।\n\n[sfx: marching footsteps on dirt road]\n\nGANDHI: [slow, commanding] सत्य और अहिंसा के मार्ग पर चलकर ही हम स्वराज्य प्राप्त कर सकते हैं।\n\nSURESH: [excited] गांधी जी, हम आपके साथ हैं!\n\n[sfx: distant conch shell blowing]\n\nNARRATOR: [calm] अनेक युवा इस आंदोलन में शामिल हो रहे थे।\n\nGANDHI: [firm, commanding] चलिए। आज हम उस नमक के लिए चलें जो हमारा है।\n\n[sfx: crowd marching louder]\n\nNARRATOR: [calm] जनसमूह का जोश बढ़ता जा रहा था।\n\nGANDHI: [passionate] मत रुको, आगे बढ़ो। सत्य की लड़ाई कभी असफल नहीं होती।\n\n[sfx: crowd cheering]\n\nNARRATOR: [calm] यह मार्च एक महान आंदोलन का प्रतीक बन गया।",
+      "cliff_out": "नमक सत्याग्रह की शुरुआत।",
+      "sfx_cues": [
+        "marching footsteps on dirt road",
+        "distant conch shell horn",
+        "crowd cheering and clapping"
+      ]
+    }
+  ],
+  "total_duration_sec": 30
+}

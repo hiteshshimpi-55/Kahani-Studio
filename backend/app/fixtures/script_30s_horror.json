@@ -1,0 +1,61 @@
+{
+  "title": "Ticket to Nowhere — 30s Hindi v3",
+  "language": "hi",
+  "narration_config": {
+    "pov": "third_limited",
+    "cast_model": "multicast",
+    "platform_style": "pocket_fm_serial",
+    "soundscape": true,
+    "narrators": [{"id": "NARRATOR", "voice_notes": "Aakash Aryan mystery thriller"}]
+  },
+  "bible": {
+    "characters": [
+      {
+        "id": "narrator",
+        "name": "NARRATOR",
+        "role": "guide",
+        "voice": "Hindi mystery thriller narrator male",
+        "speech_patterns": "calm measured then ominous",
+        "arc": "guides into dread"
+      },
+      {
+        "id": "riya",
+        "name": "RIYA",
+        "role": "protagonist",
+        "voice": "Hindi young woman relatable friend nervous",
+        "speech_patterns": "whispering fear",
+        "arc": "fear rising"
+      },
+      {
+        "id": "arjun",
+        "name": "ARJUN",
+        "role": "ally",
+        "voice": "Hindi young man deep conversational dismissive",
+        "speech_patterns": "slightly amused",
+        "arc": "downplays danger"
+      },
+      {
+        "id": "the_voice",
+        "name": "THE_VOICE",
+        "role": "antagonist",
+        "voice": "supernatural whispering distorted Hindi",
+        "speech_patterns": "whispered menace",
+        "arc": "entity upstairs"
+      }
+    ]
+  },
+  "parts": [
+    {
+      "part_number": 1,
+      "title": "खुला दरवाज़ा",
+      "target_duration_sec": 30,
+      "screenplay": "NARRATOR: [calm, measured] रात के बारह बज चुके थे। चारों दोस्त उस पुराने घर के सामने खड़े थे।\n\nRIYA: [nervous, whispering] अर्जुन, ये दरवाज़ा पहले से खुला है। मुझे अंदर जाने का मन नहीं कर रहा।\n\nARJUN: [dismissive, slightly amused] अरे कुछ नहीं होगा रिया, बस एक पुराना घर है।\n\nNARRATOR: [low, ominous] लेकिन अंदर की खामोशी कुछ अजीब थी।\n\nTHE_VOICE: [whispering, distorted] …रिया… ऊपर आ जाओ…",
+      "cliff_out": "ऊपर से फुसफुसाहट।",
+      "sfx_cues": [
+        "abandoned house at night soft wind fog ambient bed loopable",
+        "old wooden porch and door creak subtle horror foley"
+      ]
+    }
+  ],
+  "total_duration_sec": 30
+}
