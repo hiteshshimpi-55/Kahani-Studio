@@ -1,4 +1,7 @@
 from fastapi import APIRouter
+from app.api.v1 import (
+    audiobook, audience, cast, crawl, discover,
+    extraction, jobs, projects, search,tts ) 
 
 from app.api.v1 import (
     audiobook,
@@ -9,12 +12,13 @@ from app.api.v1 import (
     jobs,
     projects,
     search,
-    timeline,
     tts,
+    timeline,
     visuals,
 )
 
 router = APIRouter(prefix="/v1")
+router.include_router(discover.router)
 router.include_router(jobs.router)
 router.include_router(projects.router)
 router.include_router(tts.router)

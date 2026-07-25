@@ -6,6 +6,10 @@ ECS task role is preferred; local/dev may set AWS_ACCESS_KEY_ID.
 
 from __future__ import annotations
 
+from app.integrations.s3.storage import ArtifactStorage, get_artifact_storage
+
+__all__ = ["ArtifactStorage", "get_artifact_storage"]
+
 import logging
 import mimetypes
 from functools import lru_cache

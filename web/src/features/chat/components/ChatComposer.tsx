@@ -13,6 +13,7 @@ type Props = {
   disabled?: boolean
   variant?: 'default' | 'hero'
   placeholder?: string
+  initialValue?: string
 }
 
 export function ChatComposer({
@@ -24,10 +25,12 @@ export function ChatComposer({
   disabled = false,
   variant = 'default',
   placeholder = 'Ask anything, or describe the story you want…',
+  initialValue,
 }: Props) {
   const [value, setValue] = useState('')
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const hero = variant === 'hero'
+  const initializedRef = useRef(false)
 
   const resize = useCallback(() => {
     const el = textareaRef.current
@@ -39,6 +42,13 @@ export function ChatComposer({
   useEffect(() => {
     resize()
   }, [value, resize])
+
+  useEffect(() => {
+    if (!initializedRef.current && initialValue !== undefined) {
+      setValue(initialValue)
+      initializedRef.current = true
+    }
+  }, [initialValue])
 
   const submit = async () => {
     const text = value.trim()
