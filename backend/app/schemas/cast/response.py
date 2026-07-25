@@ -36,7 +36,7 @@ class SceneSfxResult(BaseModel):
 class CastReport(BaseModel):
     series_id: str
     language: str
-    voice_provider: str = "sarvam"
+    voice_provider: str = "elevenlabs"
     characters: list[CharacterCastResult]
     scenes: list[SceneSfxResult]
     index_name: str

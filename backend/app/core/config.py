@@ -50,7 +50,7 @@ class Settings(BaseSettings):
 
     # Default TTS / cast provider: "sarvam" | "elevenlabs"
     # Per-request override via CastScript.voice_provider / audiobook preview body.
-    tts_provider: str = "sarvam"
+    tts_provider: str = "elevenlabs"
 
     # Replicate (identity sheets + scene stills). Never commit real tokens.
     replicate_api_token: str | None = None

@@ -20,11 +20,11 @@ class CastScript(BaseModel):
     series_id: str = Field(..., min_length=1, max_length=128)
     language: str = Field(default="hi", min_length=2, max_length=8)
     title: str | None = None
-    # Which voice library to cast from. Default Sarvam (native Hindi).
-    # "elevenlabs" → search + recommend only ElevenLabs voices.
+    # Which voice library to cast from. Default ElevenLabs.
+    # "sarvam" → search + recommend only Sarvam Bulbul v3 voices.
     voice_provider: str = Field(
-        default="sarvam",
-        description="sarvam | elevenlabs — which TTS catalog to cast from",
+        default="elevenlabs",
+        description="elevenlabs | sarvam — which TTS catalog to cast from",
     )
     characters: list[CastCharacter] = Field(..., min_length=1)
     scenes: list[CastScene] = Field(default_factory=list)

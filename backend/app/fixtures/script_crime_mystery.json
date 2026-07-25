@@ -1,0 +1,64 @@
+{
+  "title": "काला साया — Episode 3: गुमशुदा सबूत",
+  "language": "hi",
+  "narration_config": {
+    "pov": "third_limited",
+    "cast_model": "multicast",
+    "platform_style": "pocket_fm_serial",
+    "soundscape": true,
+    "narrators": [{"id": "NARRATOR", "voice_notes": "intense thriller narrator, measured suspense, male"}]
+  },
+  "bible": {
+    "characters": [
+      {
+        "id": "narrator",
+        "name": "NARRATOR",
+        "role": "guide",
+        "voice": "intense male narrator, measured suspense, low rumble, thriller storyteller",
+        "speech_patterns": "measured, suspenseful, dramatic pauses, builds tension",
+        "arc": "guides through the dark investigation"
+      },
+      {
+        "id": "inspector_mehra",
+        "name": "INSPECTOR_MEHRA",
+        "role": "protagonist",
+        "voice": "mature commanding male, firm authoritative, police officer gravitas",
+        "speech_patterns": "firm, commanding, clipped sentences, interrogation style",
+        "arc": "veteran detective closing in on the truth"
+      },
+      {
+        "id": "vikram",
+        "name": "VIKRAM",
+        "role": "ally",
+        "voice": "young sharp male, tense urgency, junior officer energy",
+        "speech_patterns": "urgent, nervous, quick reports",
+        "arc": "junior officer discovering shocking evidence"
+      },
+      {
+        "id": "dr_kapoor",
+        "name": "DR_KAPOOR",
+        "role": "supporting",
+        "voice": "calm clinical female, forensic precision, detached professional",
+        "speech_patterns": "clinical, precise, emotionally detached, medical terminology",
+        "arc": "forensic expert who delivers unsettling findings"
+      }
+    ]
+  },
+  "parts": [
+    {
+      "part_number": 3,
+      "title": "गुमशुदा सबूत",
+      "target_duration_sec": 60,
+      "screenplay": "NARRATOR: [suspenseful] रात के दो बज रहे थे। मुंबई की बारिश थमने का नाम नहीं ले रही थी... और इंस्पेक्टर मेहरा के फ़ोन की घंटी बज उठी।\n\n[sfx: phone ringing in dark room]\n\nINSPECTOR_MEHRA: [firm, commanding] बोलो विक्रम। इस वक़्त फ़ोन का मतलब — कुछ बड़ा हुआ है।\n\nVIKRAM: [urgent, nervous] सर, वो लाश... जो कल नदी किनारे मिली थी — उसकी पोस्टमॉर्टम रिपोर्ट आ गई है। और सर... रिपोर्ट में कुछ ऐसा है जो सब बदल देगा।\n\n[sfx: car engine starting in rain]\n\nNARRATOR: [dramatic] मेहरा ने एक पल भी नहीं गँवाया। बारिश में भीगती सड़कों पर उनकी गाड़ी फ़ॉरेंसिक लैब की तरफ़ दौड़ पड़ी।\n\n[sfx: heavy rain on car windshield]\n\nNARRATOR: [suspenseful] फ़ॉरेंसिक लैब। सफ़ेद रोशनी। ठंडी हवा। और एक सच जो अभी तक छुपा हुआ था।\n\nDR_KAPOOR: [calm, clinical] इंस्पेक्टर, यह देखिए। शरीर पर जो ज़ख्म दिख रहे हैं — वो असली वजह नहीं हैं। असली कारण... यह ज़हर है। धीमा, बेरंग, बेस्वाद — तीन हफ़्ते से दिया जा रहा था।\n\nINSPECTOR_MEHRA: [grave, slow] तीन हफ़्ते... इसका मतलब... हत्यारा कोई अजनबी नहीं है। कोई क़रीबी है। बहुत क़रीबी।\n\n[sfx: metallic evidence tray placed on table]\n\nVIKRAM: [whisper, fear] सर, एक और बात। लाश की जेब से जो अंगूठी मिली थी — उस पर जो नाम खुदा है... वो नाम हमारे एक गवाह का है। उसी गवाह का — जिसने कल बयान दिया था कि वो मृतक को जानता ही नहीं।\n\nNARRATOR: [dramatic, reveal] एक झूठ। एक अंगूठी। और एक ऐसा रास्ता जो सीधा उस इंसान तक जाता था... जिस पर किसी को शक तक नहीं था।\n\n[sfx: thunder rumble close]\n\nINSPECTOR_MEHRA: [commanding] विक्रम — उस गवाह को अभी बुलाओ। आज रात... सच सामने आएगा।\n\nNARRATOR: [suspenseful, ominous] लेकिन सच — हमेशा वो नहीं होता जो दिखता है। और इस कहानी में... सबसे ख़तरनाक मोड़ अभी बाक़ी था।",
+      "cliff_out": "गवाह का झूठ पकड़ा गया — लेकिन असली ख़तरा अभी सामने आना बाक़ी है।",
+      "sfx_cues": [
+        "phone ringing in dark room",
+        "car engine starting in rain",
+        "heavy rain on car windshield",
+        "metallic evidence tray placed on table",
+        "thunder rumble close"
+      ]
+    }
+  ],
+  "total_duration_sec": 60
+}

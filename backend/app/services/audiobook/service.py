@@ -54,22 +54,45 @@ _SFX_RE = re.compile(r"^\[sfx:\s*(?P<cue>[^\]]+)\]$", re.IGNORECASE)
 WORDS_PER_SEC = 2.2
 
 # ── humanised silence durations (seconds) ─────────────────────────
-# These mimic how real audiobooks / movie dialogues breathe.
-# A real conversation has ~1-2s between speakers; narration is slower.
-PAUSE_BREATH = 0.5            # minimal breath within same speaker
-PAUSE_SAME_SPEAKER = 0.75     # between consecutive sentences by same speaker
-PAUSE_SPEAKER_CHANGE = 1.4    # different character takes over — a beat
-PAUSE_NARRATOR_TO_CHAR = 1.1  # narrator hands off to a character
-PAUSE_CHAR_TO_NARRATOR = 1.0  # character finishes, narrator resumes
-PAUSE_AFTER_QUESTION = 1.6    # someone asked a question → thinking beat
-PAUSE_AFTER_EXCLAMATION = 0.9 # urgency — shorter gap
-PAUSE_DRAMATIC = 2.0          # after a dramatic beat / scene break
-PAUSE_BEFORE_SFX = 0.6        # let the last word settle before SFX
-PAUSE_AFTER_SFX = 0.9         # let the SFX ring out before speech resumes
+# Production audio dramas fill every gap with room tone / ambience —
+# these gaps only shape *rhythm*; the bed below removes "dead air".
+# Slightly tighter than before because a bed makes gaps feel longer.
+PAUSE_BREATH = 0.45           # minimal breath within same speaker
+PAUSE_SAME_SPEAKER = 0.65     # between consecutive sentences by same speaker
+PAUSE_SPEAKER_CHANGE = 1.1    # different character takes over — a beat
+PAUSE_NARRATOR_TO_CHAR = 0.9  # narrator hands off to a character
+PAUSE_CHAR_TO_NARRATOR = 0.85 # character finishes, narrator resumes
+PAUSE_AFTER_QUESTION = 1.3    # someone asked a question → thinking beat
+PAUSE_AFTER_EXCLAMATION = 0.6 # urgency — clipped gap keeps energy up
+PAUSE_DRAMATIC = 1.8          # after a dramatic beat / reveal — let it land
+PAUSE_BEFORE_SFX = 0.45       # let the last word settle before SFX
+PAUSE_AFTER_SFX = 0.7         # let the SFX ring out before speech resumes
 
-# SFX clip length — short stingers between dialogue, not ambient beds
-SFX_CLIP_SEC = 2.5
-SFX_FADE_MS = 300             # fade-in and fade-out for SFX clips (ms)
+# Directions that earn a long "let it land" pause after the line
+_DRAMATIC_DIRECTIONS = frozenset(
+    ["dramatic", "reveal", "suspense", "ominous", "grave", "solemn", "dying"]
+)
+
+# SFX clip length — short spot effects between dialogue, not ambient beds
+SFX_CLIP_SEC = 3.0
+SFX_FADE_MS = 250             # fade-in and fade-out for SFX clips (ms)
+
+# ── production mix targets (from broadcast/audio-drama research) ────
+# Dialogue is the anchor. JAES ducking study + film-mix practice:
+#   music bed 10-15 LU below dialogue, ambience 15-20 LU below while
+#   speech is active; the bed may breathe up in gaps.
+DIALOGUE_LUFS = -16.0         # integrated loudness anchor for the dialogue bus
+BED_LUFS = -30.0              # ambience bed ≈14 LU below dialogue in gaps
+SPOT_SFX_LUFS = -21.0         # spot SFX ≈5 LU below dialogue — present, never louder
+BED_CLIP_SEC = 20.0           # generated ambience length (looped to full duration)
+BED_FADE_IN_SEC = 1.5
+BED_FADE_OUT_SEC = 2.5
+# Sidechain duck: with dialogue anchored at -16 LUFS, threshold 0.02 and
+# ratio 2 pull the bed ~6-9 dB further down while someone speaks.
+DUCK_THRESHOLD = 0.02
+DUCK_RATIO = 2.0
+DUCK_ATTACK_MS = 25
+DUCK_RELEASE_MS = 500
 
 
 class EventType(str, Enum):
@@ -193,36 +216,74 @@ def _build_character_base_tags(bible_chars: list[dict[str, Any]]) -> dict[str, s
 def _v3_tagged_text(direction: str, text: str, *, base_tag: str = "") -> str:
     """Wrap spoken text with ElevenLabs v3 ``[direction]`` audio tag.
 
-    If a ``base_tag`` is provided (the character's stable personality),
-    it is prepended so the model keeps a consistent vocal identity.
-    The line-specific ``direction`` is added after it.
+    v3 guidance: at most 1-2 cues per line — stacking more causes
+    unstable/flat reads.  The line direction wins (it carries the
+    emotion of the moment); one personality word keeps identity.
     """
     direction = (direction or "").strip()
     if text.lstrip().startswith("["):
         return text
 
-    # Merge base personality + line direction, deduplicating words
-    base_words = [w.strip() for w in (base_tag or "").split(",") if w.strip()]
     dir_words = [w.strip() for w in direction.split(",") if w.strip()]
+    base_words = [w.strip() for w in (base_tag or "").split(",") if w.strip()]
     seen: set[str] = set()
     merged: list[str] = []
-    for w in base_words + dir_words:
+    for w in dir_words + base_words:
         key = w.lower()
         if key not in seen:
             seen.add(key)
             merged.append(w)
+        if len(merged) >= 2:
+            break
 
     if not merged:
         return text
     return f"[{', '.join(merged)}] {text}"
 
 
+# ── prosody text prep (punctuation-first pacing) ────────────────────
+# Pros shape pacing with punctuation before anything else: ellipses for
+# beats/hesitation, dashes converted to beats, clean sentence ends.
+
+_DASH_BEAT_RE = re.compile(r"\s+[—–-]\s+")
+_MULTI_DOT_RE = re.compile(r"\.{3,}")
+
+
+def _prep_text_for_tts(text: str, direction: str, role: str) -> str:
+    """Punctuation-level pacing prep applied before synthesis.
+
+    - spaced dashes → ellipsis beats (both engines honour "…" as a beat)
+    - dramatic directions get a trailing beat so the line can land
+    - narrator paragraph starts stay clean (no leading fillers)
+    """
+    t = text.strip()
+    t = _MULTI_DOT_RE.sub("…", t)
+    t = _DASH_BEAT_RE.sub("… ", t)
+
+    d = (direction or "").lower()
+    if any(k in d for k in _DRAMATIC_DIRECTIONS) and not t.endswith(("…", "?", "!")):
+        t = t.rstrip(".") + "…"
+    return t
+
+
 # ── humanised pause calculator ──────────────────────────────────────
+
+def _pause_jitter(seq_id: str, base: float) -> float:
+    """Deterministic ±12% variation so gaps never sound metronomic.
+
+    Real narration varies every beat; uniform gaps are the #1 tell of
+    machine assembly.  Seeded off seq_id so renders are reproducible.
+    """
+    h = sum(ord(c) * (i + 7) for i, c in enumerate(seq_id))
+    factor = 1.0 + ((h % 25) - 12) / 100.0
+    return round(base * factor, 2)
+
 
 def _compute_pause(
     *,
     prev_speaker: str | None,
     prev_text: str | None,
+    prev_direction: str | None,
     prev_was_sfx: bool,
     cur_speaker: str,
     narrator_ids: frozenset[str],
@@ -245,6 +306,11 @@ def _compute_pause(
     cur_is_narrator = cur_upper in narrator_ids
 
     last_char = (prev_text or "").rstrip()[-1:] if prev_text else ""
+    prev_dir = (prev_direction or "").lower()
+
+    # A dramatic line earns a long hold — let it land before anyone speaks.
+    if any(k in prev_dir for k in _DRAMATIC_DIRECTIONS):
+        return PAUSE_DRAMATIC
 
     if same:
         if last_char == "?":
@@ -277,17 +343,16 @@ _HIGH_STABILITY_HINTS = frozenset(
 def _stability_for_direction(direction: str) -> float:
     """Map acting direction to ElevenLabs stability.
 
-    We keep stability high (0.65-0.80) to ensure the same character
-    sounds like the same person throughout.  Lower stability gives more
-    expressiveness but risks making consecutive lines sound like
-    different people — which listeners perceive as a voice change.
+    v3 guidance: tags respond best around 0.3-0.5 (Creative/Natural);
+    high stability mutes the emotion.  We fix a per-voice seed for
+    consistency, so we can afford lower stability for expressiveness.
     """
     tokens = set(direction.lower().replace(",", " ").split())
     if tokens & _LOW_STABILITY_HINTS:
-        return 0.55
+        return 0.42
     if tokens & _HIGH_STABILITY_HINTS:
-        return 0.80
-    return 0.70
+        return 0.72
+    return 0.58
 
 
 def _speed_for_role(role: str, direction: str) -> float | None:
@@ -325,7 +390,7 @@ def _sarvam_delivery(role: str, direction: str) -> tuple[float, float]:
     elif any(k in d for k in ("calm", "measured", "observational")):
         temperature = 0.65
     elif role_l in ("narrator", "guide"):
-        temperature = 0.72  # warm narrator, not flat
+        temperature = 0.78  # engaged storyteller — Sarvam docs suggest ~0.8
     else:
         temperature = 0.82  # default character expressiveness
 
@@ -350,7 +415,7 @@ def package_to_cast_script(
     package: dict[str, Any],
     *,
     series_id: str,
-    voice_provider: str = "sarvam",
+    voice_provider: str = "elevenlabs",
 ) -> tuple[CastScript, list[str]]:
     """Build a ``CastScript`` from the scripter's output.
 
@@ -485,10 +550,10 @@ def _voice_map_from_cast(
 
 
 def _normalize_voice_provider(value: str | None) -> str:
-    raw = (value or settings.tts_provider or "sarvam").strip().lower()
-    if raw in ("elevenlabs", "11labs", "eleven", "el"):
-        return "elevenlabs"
-    return "sarvam"
+    raw = (value or settings.tts_provider or "elevenlabs").strip().lower()
+    if raw in ("sarvam", "bulbul"):
+        return "sarvam"
+    return "elevenlabs"
 
 
 def _assign_voices(
@@ -498,7 +563,7 @@ def _assign_voices(
     cast_providers: dict[str, str],
     language: str,
     *,
-    voice_provider: str = "sarvam",
+    voice_provider: str = "elevenlabs",
     cast_alternatives: dict[str, list[tuple[str, str]]] | None = None,
     prefer_paid: bool = False,
 ) -> tuple[dict[str, str], dict[str, str]]:
@@ -786,22 +851,24 @@ def _generate_silence(dest: str, duration_sec: float) -> str:
     return str(dest_p)
 
 
-def _normalize_to_mono(src: str, dest: str, *, fade_ms: int = 0) -> str:
-    """Convert any MP3 to mono 44100 Hz, optionally with fade-in/out."""
+def _normalize_to_mono(
+    src: str,
+    dest: str,
+    *,
+    fade_ms: int = 0,
+    target_lufs: float | None = None,
+) -> str:
+    """Convert any audio to mono 44100 Hz; optional loudness + fades.
+
+    ``target_lufs`` anchors the clip loudness (dialogue-edit step: every
+    stem/spot lands at a known LU offset from the dialogue anchor).
+    """
     dest_p = Path(dest)
     dest_p.parent.mkdir(parents=True, exist_ok=True)
     af_parts: list[str] = []
+    if target_lufs is not None:
+        af_parts.append(f"loudnorm=I={target_lufs:.0f}:TP=-1.5:LRA=11")
     if fade_ms > 0:
-        fade_sec = fade_ms / 1000.0
-        af_parts.append(f"afade=t=in:d={fade_sec:.2f}")
-        af_parts.append(f"afade=t=out:st=-1:d={fade_sec:.2f}")
-    cmd = [
-        "ffmpeg", "-y", "-i", src,
-        "-ac", "1", "-ar", "44100",
-    ]
-    if af_parts:
-        # fade-out needs the actual duration, use a two-pass approach
-        # simpler: use acrossfade or just apply both fades
         probe = subprocess.run(
             ["ffprobe", "-v", "error", "-show_entries", "format=duration",
              "-of", "default=noprint_wrappers=1:nokey=1", src],
@@ -813,8 +880,11 @@ def _normalize_to_mono(src: str, dest: str, *, fade_ms: int = 0) -> str:
             dur = SFX_CLIP_SEC
         fade_sec = fade_ms / 1000.0
         out_start = max(0, dur - fade_sec)
-        af = f"afade=t=in:d={fade_sec:.2f},afade=t=out:st={out_start:.2f}:d={fade_sec:.2f}"
-        cmd += ["-af", af]
+        af_parts.append(f"afade=t=in:d={fade_sec:.2f}")
+        af_parts.append(f"afade=t=out:st={out_start:.2f}:d={fade_sec:.2f}")
+    cmd = ["ffmpeg", "-y", "-i", src, "-ac", "1", "-ar", "44100"]
+    if af_parts:
+        cmd += ["-af", ",".join(af_parts)]
     cmd += ["-c:a", "libmp3lame", "-b:a", "128k", str(dest_p)]
     subprocess.run(cmd, check=True, capture_output=True)
     return str(dest_p)
@@ -852,19 +922,97 @@ def _concat_segments(paths: list[str], dest: str) -> None:
                 out.write(Path(p).read_bytes())
 
 
-def _loudnorm(src: str, dest: str) -> None:
-    """Apply broadcast loudness normalization (keep mono 44100 Hz)."""
+def _loudnorm(src: str, dest: str, *, target_lufs: float = DIALOGUE_LUFS) -> None:
+    """Anchor a bus at a known integrated loudness (mono 44100 Hz).
+
+    Production mixes reason in LU offsets from the dialogue anchor —
+    normalizing each bus first makes the bed/spot offsets deterministic.
+    """
     subprocess.run(
         [
             "ffmpeg", "-y", "-i", src,
-            "-af", "loudnorm=I=-16:TP=-1.5:LRA=11",
+            "-af", f"loudnorm=I={target_lufs:.0f}:TP=-1.5:LRA=11",
             "-ar", "44100", "-ac", "1",
             "-c:a", "libmp3lame", "-b:a", "128k",
             dest,
         ],
         check=True, capture_output=True,
     )
-    log.info("loudnorm_ok path=%s", dest)
+    log.info("loudnorm_ok path=%s target=%.0fLUFS", dest, target_lufs)
+
+
+def _probe_duration(src: str) -> float:
+    probe = subprocess.run(
+        ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+         "-of", "default=noprint_wrappers=1:nokey=1", src],
+        capture_output=True, text=True,
+    )
+    try:
+        return float(probe.stdout.strip())
+    except (ValueError, AttributeError):
+        return 0.0
+
+
+def _mix_bed_under_dialogue(dialogue_path: str, bed_path: str, dest: str) -> None:
+    """Two-bus mix: ambience bed looped under the dialogue bus, ducked.
+
+    Mirrors the standard audio-drama chain:
+    1. bed is band-limited (HPF/LPF) so it never masks vocal presence
+    2. sidechain compression ducks the bed ~6-9 dB while speech is active
+       (bed anchored 14 LU below dialogue → 20+ LU below during speech,
+       breathing back up in the gaps — exactly the JAES-recommended range)
+    3. amix with normalize=0 keeps the dialogue level untouched
+    4. bed fades in at the start and out over the tail
+    """
+    total = _probe_duration(dialogue_path)
+    fade_out_start = max(0.0, total - BED_FADE_OUT_SEC)
+    filter_complex = (
+        f"[1:a]highpass=f=120,lowpass=f=8500,"
+        f"afade=t=in:d={BED_FADE_IN_SEC:.1f},"
+        f"afade=t=out:st={fade_out_start:.2f}:d={BED_FADE_OUT_SEC:.1f}[bed];"
+        f"[0:a]asplit=2[dlg][sc];"
+        f"[bed][sc]sidechaincompress="
+        f"threshold={DUCK_THRESHOLD}:ratio={DUCK_RATIO}:"
+        f"attack={DUCK_ATTACK_MS}:release={DUCK_RELEASE_MS}[duck];"
+        f"[dlg][duck]amix=inputs=2:duration=first:normalize=0[mix]"
+    )
+    subprocess.run(
+        [
+            "ffmpeg", "-y",
+            "-i", dialogue_path,
+            "-stream_loop", "-1", "-i", bed_path,
+            "-filter_complex", filter_complex,
+            "-map", "[mix]",
+            "-t", f"{total:.2f}",
+            "-ar", "44100", "-ac", "1",
+            "-c:a", "libmp3lame", "-b:a", "128k",
+            dest,
+        ],
+        check=True, capture_output=True,
+    )
+    log.info("bed_mix_ok path=%s duration=%.1fs", dest, total)
+
+
+def _build_bed_prompt(package: dict[str, Any], sfx_cues: list[str]) -> str:
+    """Derive one continuous scene-ambience prompt from the script.
+
+    Spot cues are events; the bed is the *place*.  We reuse cue nouns as
+    distant colour but explicitly ask for a steady, loopable, low-key
+    atmosphere with no music and no voices (dialogue owns the front).
+    """
+    parts = package.get("parts") or []
+    setting = str(parts[0].get("title") or package.get("title") or "scene") if parts else "scene"
+    colour = ", ".join(c.strip() for c in sfx_cues[:3] if c.strip())
+    prompt = (
+        f"Continuous ambient background atmosphere for an audio drama scene: {setting}. "
+    )
+    if colour:
+        prompt += f"Very distant, soft hints of: {colour}. "
+    prompt += (
+        "Steady room-tone style bed, low intensity, loopable, evolving gently, "
+        "no music, no melody, no voices, no speech, no sudden loud events."
+    )
+    return prompt
 
 
 # ── main service ─────────────────────────────────────────────────────
@@ -888,6 +1036,7 @@ class AudiobookService:
         max_sec: float = 120.0,
         concat: bool = True,
         with_sfx: bool = True,
+        with_bed: bool = True,
         prefer_account_voices: bool = False,
         voice_provider: str | None = None,
     ) -> dict[str, Any]:
@@ -974,7 +1123,11 @@ class AudiobookService:
         out_dir.mkdir(parents=True, exist_ok=True)
 
         tts = TtsService()
-        el_client = get_elevenlabs_client() if with_sfx else None
+        el_client = (
+            get_elevenlabs_client()
+            if (with_sfx or with_bed) and has_eleven
+            else None
+        )
 
         stems: list[dict[str, Any]] = []
         sfx_clips: list[dict[str, Any]] = []
@@ -1015,6 +1168,7 @@ class AudiobookService:
 
         prev_speaker: str | None = None
         prev_text: str | None = None
+        prev_direction: str | None = None
         prev_was_sfx = False
         sfx_idx = 0
         past_budget = False
@@ -1041,7 +1195,12 @@ class AudiobookService:
                     sfx_raw = str(out_dir / f"{sfx_id}_raw.mp3")
                     Path(sfx_raw).write_bytes(sfx_bytes)
 
-                    _normalize_to_mono(sfx_raw, sfx_path, fade_ms=SFX_FADE_MS)
+                    # Level the spot ~5 LU below dialogue — audible, never louder
+                    _normalize_to_mono(
+                        sfx_raw, sfx_path,
+                        fade_ms=SFX_FADE_MS,
+                        target_lufs=SPOT_SFX_LUFS,
+                    )
 
                     sfx_clips.append({
                         "sfx_id": sfx_id, "cue": cue,
@@ -1073,9 +1232,11 @@ class AudiobookService:
 
                 stem_path_out = str(out_dir / f"{line.seq_id}.mp3")
 
+                prepped_text = _prep_text_for_tts(line.text, line.direction, role)
+
                 if use_sarvam_line:
                     # Sarvam: no [emotion] tags — drive delivery via temperature + pace
-                    spoken = line.text
+                    spoken = prepped_text
                     pace, temperature = _sarvam_delivery(role, line.direction)
 
                     lang_code = "hi-IN" if language.startswith("hi") else "en-IN"
@@ -1089,9 +1250,11 @@ class AudiobookService:
                         sample_rate=44100,
                     )
                     Path(stem_path_out).write_bytes(audio_bytes)
-                    # Sarvam returns WAV — normalize to mono mp3
+                    # Sarvam returns WAV — mono mp3, anchored at dialogue loudness
                     stem_norm = str(out_dir / f"{line.seq_id}_norm.mp3")
-                    _normalize_to_mono(stem_path_out, stem_norm)
+                    _normalize_to_mono(
+                        stem_path_out, stem_norm, target_lufs=DIALOGUE_LUFS,
+                    )
                     stem_path_out = stem_norm
                     stem_size = Path(stem_path_out).stat().st_size
                     log.info(
@@ -1102,7 +1265,7 @@ class AudiobookService:
                     # ElevenLabs: use v3 tags + voice settings
                     base_tag = char_base_tags.get(line.speaker.upper(), "")
                     spoken = _v3_tagged_text(
-                        line.direction, line.text, base_tag=base_tag,
+                        line.direction, prepped_text, base_tag=base_tag,
                     )
                     stability = _stability_for_direction(line.direction)
                     speed = _speed_for_role(role, line.direction)
@@ -1124,8 +1287,12 @@ class AudiobookService:
                             ),
                         )
                     )
-                    stem_path_out = result.path
-                    stem_size = Path(result.path).stat().st_size
+                    # Anchor every stem at the dialogue loudness so all
+                    # characters sit at the same level (dialogue-edit pass).
+                    stem_norm = str(out_dir / f"{line.seq_id}_norm.mp3")
+                    _normalize_to_mono(result.path, stem_norm, target_lufs=DIALOGUE_LUFS)
+                    stem_path_out = stem_norm
+                    stem_size = Path(stem_path_out).stat().st_size
                 stems.append({
                     "seq_id": line.seq_id,
                     "speaker": line.speaker,
@@ -1143,36 +1310,76 @@ class AudiobookService:
                     stem_size,
                 )
 
-                # Humanised pause before this stem
+                # Humanised pause before this stem — jittered so the
+                # rhythm never sounds metronomic.
                 if timeline_segments and has_ffmpeg:
                     pause = _compute_pause(
                         prev_speaker=prev_speaker,
                         prev_text=prev_text,
+                        prev_direction=prev_direction,
                         prev_was_sfx=prev_was_sfx,
                         cur_speaker=line.speaker,
                         narrator_ids=narrator_ids,
                     )
                     if pause > 0:
-                        timeline_segments.append(_get_silence(pause))
+                        timeline_segments.append(
+                            _get_silence(_pause_jitter(line.seq_id, pause))
+                        )
 
                 timeline_segments.append(stem_path_out)
                 prev_speaker = line.speaker
                 prev_text = line.text
+                prev_direction = line.direction
                 prev_was_sfx = False
 
-        # ── 3. Assemble final timeline ──────────────────────────────
+        # ── 3. Assemble final timeline (two-bus production mix) ─────
+        # dialogue bus (stems + gaps + spot SFX) → loudness anchor →
+        # ambience bed looped underneath with sidechain ducking →
+        # final master.  The bed removes "dead air": every pause has
+        # room tone, and the bed breathes up in the gaps like a real mix.
         preview_path = str(out_dir / "preview_30s.mp3")
+        bed_prompt: str | None = None
+        bed_path: str | None = None
 
         if concat and timeline_segments:
             raw_path = str(out_dir / "preview_raw.mp3")
             _concat_segments(timeline_segments, raw_path)
 
             if has_ffmpeg:
+                dialogue_bus = str(out_dir / "dialogue_bus.mp3")
                 try:
-                    _loudnorm(raw_path, preview_path)
+                    _loudnorm(raw_path, dialogue_bus, target_lufs=DIALOGUE_LUFS)
                 except Exception:
-                    log.exception("loudnorm failed — using raw concat")
-                    Path(preview_path).write_bytes(Path(raw_path).read_bytes())
+                    log.exception("dialogue loudnorm failed — using raw concat")
+                    dialogue_bus = raw_path
+
+                # Generate + anchor the ambience bed
+                if with_bed and el_client is not None:
+                    try:
+                        bed_prompt = _build_bed_prompt(package, sfx_cues)
+                        bed_bytes = generate_sound_effect(
+                            el_client,
+                            prompt=bed_prompt,
+                            duration_seconds=BED_CLIP_SEC,
+                            prompt_influence=0.45,
+                        )
+                        bed_raw = str(out_dir / "bed_raw.mp3")
+                        Path(bed_raw).write_bytes(bed_bytes)
+                        bed_path = str(out_dir / "bed.mp3")
+                        _normalize_to_mono(bed_raw, bed_path, target_lufs=BED_LUFS)
+                        log.info("bed_ok prompt=%s", bed_prompt[:100])
+                    except Exception:
+                        log.exception("bed_generation_failed — mixing without bed")
+                        bed_path = None
+
+                try:
+                    if bed_path:
+                        _mix_bed_under_dialogue(dialogue_bus, bed_path, preview_path)
+                    else:
+                        Path(preview_path).write_bytes(Path(dialogue_bus).read_bytes())
+                except Exception:
+                    log.exception("bed_mix_failed — using dialogue bus only")
+                    Path(preview_path).write_bytes(Path(dialogue_bus).read_bytes())
             else:
                 Path(preview_path).write_bytes(Path(raw_path).read_bytes())
 
@@ -1191,5 +1398,7 @@ class AudiobookService:
             "provider_map": provider_map,
             "stems": stems,
             "sfx_clips": sfx_clips,
+            "bed_prompt": bed_prompt,
+            "bed_mp3": bed_path,
             "preview_mp3": preview_path if stems else None,
         }
