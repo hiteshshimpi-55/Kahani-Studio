@@ -82,7 +82,13 @@ def safe_filename(name: str) -> str:
     return cleaned or "upload.txt"
 
 
+def attachment_object_key(project_id: str, attachment_id: str, filename: str) -> str:
+    """Object key for artifact storage (S3 or DATA_DIR layout)."""
+    return f"projects/{project_id}/attachments/{attachment_id}_{safe_filename(filename)}"
+
+
 def attachment_storage_path(project_id: str, attachment_id: str, filename: str) -> Path:
+    """Legacy local path helper (prefer attachment_object_key + ArtifactStorage)."""
     return attachments_dir(project_id) / f"{attachment_id}_{safe_filename(filename)}"
 
 

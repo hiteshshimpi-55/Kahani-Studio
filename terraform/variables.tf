@@ -28,7 +28,7 @@ variable "web_origins" {
   default = [
     "https://uselamp.app",
     "https://www.uselamp.app",
-    "https://*.vercel.app",
+    "https://kahani-studio-three.vercel.app",
   ]
 }
 

@@ -37,6 +37,10 @@ class Settings(BaseSettings):
     redis_url: str = "redis://redis:6379/0"
     data_dir: str = "/data"
 
+    # Raw artifact blobs (attachments, later audio/visuals). Empty → DATA_DIR fallback.
+    artifacts_bucket: str | None = None
+    aws_region: str = "us-east-1"
+
     # ElevenLabs (TTS). Never commit real keys.
     elevenlabs_api_key: str | None = None
     elevenlabs_default_model_id: str = "eleven_v3"

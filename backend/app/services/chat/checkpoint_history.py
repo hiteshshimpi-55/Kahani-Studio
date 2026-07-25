@@ -50,17 +50,26 @@ def assemble_chat_history(messages: list[AnyMessage]) -> list[dict[str, Any]]:
             questions = kwargs.get("questions") or []
             if not isinstance(questions, list):
                 questions = []
-            items.append(
-                {
-                    "id": str(mid),
-                    "role": "assistant",
-                    "content": _extract_text(m.content),
-                    "kind": str(kwargs.get("kind") or "reply"),
-                    "created_at": now,
-                    "run_id": kwargs.get("run_id"),
-                    "questions": [str(q) for q in questions],
-                }
-            )
+            analysis = kwargs.get("analysis") or {}
+            plot_pitches = analysis.get("plot_pitches") or []
+            if not isinstance(plot_pitches, list):
+                plot_pitches = []
+            item: dict[str, Any] = {
+                "id": str(mid),
+                "role": "assistant",
+                "content": _extract_text(m.content),
+                "kind": str(kwargs.get("kind") or "reply"),
+                "created_at": now,
+                "run_id": kwargs.get("run_id"),
+                "questions": [str(q) for q in questions],
+            }
+            if plot_pitches:
+                item["plot_pitches"] = [
+                    {"title": p.get("title", ""), "logline": p.get("logline", ""), "tone": p.get("tone", "")}
+                    for p in plot_pitches
+                    if isinstance(p, dict)
+                ]
+            items.append(item)
     return items
 
 

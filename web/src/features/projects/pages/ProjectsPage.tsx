@@ -2,8 +2,8 @@ import { Plus } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 
+import { ListingEmptyState, ListingShell, PageHeader } from '@/components/layout/PageHeader'
 import { Button } from '@/components/ui/button'
-import { StudioVisuals } from '@/components/ui/StudioVisuals'
 
 import { CreateProjectDialog } from '../components/CreateProjectDialog'
 import { ProjectCard } from '../components/ProjectCard'
@@ -25,58 +25,35 @@ export function ProjectsPage() {
   }, [params, setParams])
 
   return (
-    <div className="mx-auto max-w-6xl">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="text-[22px] font-semibold tracking-tight text-[var(--text-primary)]">
-            Projects
-          </h1>
-          <p className="mt-1 text-[13px] text-[var(--text-secondary)]">
-            Open a project chat to prompt the Script Writer agent.
-          </p>
-        </div>
-        <Button type="button" onClick={() => setDialogOpen(true)}>
-          <Plus className="h-4 w-4 stroke-[1.75]" />
-          New project
-        </Button>
-      </div>
+    <ListingShell maxWidth="6xl">
+      <PageHeader
+        title="Projects"
+        description="Open a project chat to prompt the Script Writer agent."
+        actions={
+          <Button type="button" onClick={() => setDialogOpen(true)}>
+            <Plus className="h-4 w-4 stroke-[1.75]" />
+            New project
+          </Button>
+        }
+      />
 
-      {error ? <p className="mt-6 text-[13px] text-destructive">{error}</p> : null}
-
-      <div className="mt-8 rounded-[18px] border border-[var(--folio-border)] bg-[linear-gradient(135deg,var(--surface-2),var(--surface-1))] p-4 shadow-[0_10px_30px_rgba(15,23,42,0.08)]">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-[var(--brand)]">
-              AI story studio
-            </p>
-            <h2 className="mt-1 text-[16px] font-semibold text-[var(--text-primary)]">
-              Build immersive story worlds in one place
-            </h2>
-          </div>
-          <p className="max-w-[360px] text-[12px] leading-5 text-[var(--text-secondary)]">
-            Prompt the script writer, add context, and shape visuals for the next binge-worthy release.
-          </p>
-        </div>
-        <div className="mt-4">
-          <StudioVisuals />
-        </div>
-      </div>
+      {error ? <p className="mb-4 text-[13px] text-destructive">{error}</p> : null}
 
       {loading ? (
-        <p className="mt-10 text-[13px] text-[var(--text-secondary)]">Loading projects…</p>
+        <p className="text-[13px] text-[var(--text-secondary)]">Loading projects…</p>
       ) : projects.length === 0 ? (
-        <div className="mt-16 flex flex-col items-center text-center">
-          <p className="text-[15px] font-semibold text-[var(--text-primary)]">No projects yet</p>
-          <p className="mt-1 max-w-sm text-[13px] text-[var(--text-secondary)]">
-            Create a project, then chat with the agent to generate scripts.
-          </p>
-          <Button type="button" className="mt-6" onClick={() => setDialogOpen(true)}>
-            <Plus className="h-4 w-4 stroke-[1.75]" />
-            Create your first project
-          </Button>
-        </div>
+        <ListingEmptyState
+          title="No projects yet"
+          description="Create a project, then chat with the agent to generate scripts."
+          action={
+            <Button type="button" onClick={() => setDialogOpen(true)}>
+              <Plus className="h-4 w-4 stroke-[1.75]" />
+              Create your first project
+            </Button>
+          }
+        />
       ) : (
-        <div className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {projects.map((p) => (
             <ProjectCard key={p.id} project={p} />
           ))}
@@ -92,6 +69,6 @@ export function ProjectsPage() {
           return project
         }}
       />
-    </div>
+    </ListingShell>
   )
 }
