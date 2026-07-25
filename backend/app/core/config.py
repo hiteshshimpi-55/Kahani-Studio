@@ -4,7 +4,7 @@ from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Walk up from this file to find .env at the project root
-_HERE = Path(__file__).resolve().parent          # app/core/
+_HERE = Path(__file__).resolve().parent  # app/core/
 _ENV = next(
     (p / ".env" for p in [_HERE, *_HERE.parents] if (p / ".env").exists()),
     _HERE / ".env",
@@ -38,14 +38,63 @@ class Settings(BaseSettings):
     redis_url: str = "redis://redis:6379/0"
     data_dir: str = "/data"
 
-    allowed_origins: list[str] = ["*"]
+    # ElevenLabs (TTS). Never commit real keys.
+    elevenlabs_api_key: str | None = None
+    elevenlabs_default_model_id: str = "eleven_v3"
+    elevenlabs_default_output_format: str = "mp3_44100_128"
+    elevenlabs_default_voice_id: str = "JBFqnCBsd6RMkjVDRZzb"  # George (library)
 
-    # OpenAI
+    # Replicate (identity sheets + scene stills). Never commit real tokens.
+    replicate_api_token: str | None = None
+    replicate_face_model: str = "black-forest-labs/flux-schnell"
+    # Pin version — owner/name alone can 404 on predictions.create for some accounts.
+    replicate_pulid_model: str = (
+        "bytedance/flux-pulid:8baa7ef2255075b46f4d91cd238c21d31181b3e6a864463f967960bb0112525b"
+    )
+    replicate_default_width: int = 576
+    replicate_default_height: int = 1024
+
+    # Databricks workspace + AI Search / Vector Search.
+    databricks_host: str | None = None
+    databricks_token: str | None = None
+    # Team project-context Direct Access index
+    databricks_ai_search_endpoint: str | None = None
+    databricks_ai_search_index: str | None = None
+    # Cast / SFX / shot-template Delta Sync index
+    databricks_vector_search_endpoint: str | None = None
+    databricks_vector_search_index: str | None = None
+    databricks_vector_search_columns: str = (
+        "id,asset_type,provider_id,name,language,gender,description,"
+        "preview_url,free_users_allowed"
+    )
+    databricks_catalog: str = "workspace"
+    databricks_schema: str = "kissa"
+    databricks_cast_table: str = "cast_assets"
+    databricks_embedding_endpoint: str = "databricks-qwen3-embedding-0-6b"
+    databricks_sql_warehouse_id: str | None = None
+
+    # Script Writer LLM (falls back to stub screenplay if LLM_API_KEY unset)
+    llm_provider: str = "openai"
+    llm_api_key: str = ""
+    llm_model: str = "gpt-4o"
+
+    # Legacy aliases used by some team snippets
     openai_api_key: str = ""
     openai_model: str = "gpt-4o"
-
-    # Tavily
     tavily_api_key: str = ""
+
+    allowed_origins: list[str] = ["*"]
+
+    @property
+    def databricks_cast_table_fqn(self) -> str:
+        return f"{self.databricks_catalog}.{self.databricks_schema}.{self.databricks_cast_table}"
+
+    @property
+    def databricks_cast_index_fqn(self) -> str:
+        configured = (self.databricks_vector_search_index or "").strip()
+        if configured:
+            return configured
+        return f"{self.databricks_catalog}.{self.databricks_schema}.{self.databricks_cast_table}_index"
 
     @field_validator("database_url", mode="before")
     @classmethod
@@ -56,3 +105,6 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+# Allow OPENAI_API_KEY to stand in for LLM_API_KEY when only one is set.
+if not (settings.llm_api_key or "").strip() and (settings.openai_api_key or "").strip():
+    settings.llm_api_key = settings.openai_api_key

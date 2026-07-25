@@ -1,0 +1,51 @@
+{
+  "series_id": "horror_demo_p1",
+  "language": "hi",
+  "title": "Ticket to Nowhere",
+  "characters": [
+    {
+      "id": "NARR",
+      "role": "narrator",
+      "age_band": "30s",
+      "gender": "female",
+      "traits": ["calm", "measured", "thriller"],
+      "casting_query": "Hindi female narrator mystery thriller calm measured Pocket FM serial"
+    },
+    {
+      "id": "RIYA",
+      "role": "character",
+      "age_band": "20s",
+      "gender": "female",
+      "traits": ["terrified", "whisper"],
+      "casting_query": "young Hindi woman scared whispered dialogue horror protagonist"
+    },
+    {
+      "id": "ARJUN",
+      "role": "character",
+      "age_band": "20s",
+      "gender": "male",
+      "traits": ["cold", "threatening"],
+      "casting_query": "young Hindi man cold threatening dialogue thriller antagonist ally"
+    },
+    {
+      "id": "THE_VOICE",
+      "role": "character",
+      "age_band": "unknown",
+      "gender": "male",
+      "traits": ["supernatural", "deep", "horror"],
+      "casting_query": "deep threatening supernatural male horror voice entity whispered menace"
+    }
+  ],
+  "scenes": [
+    {
+      "scene_id": "s01",
+      "setting": "abandoned house night rain",
+      "sfx_query": "abandoned house night soft rain wind floorboard creak ambience bed"
+    },
+    {
+      "scene_id": "s02",
+      "setting": "railway platform night",
+      "sfx_query": "train platform loudspeaker crackle distant train night station ambience"
+    }
+  ]
+}
