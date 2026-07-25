@@ -6,14 +6,18 @@ from sse_starlette.sse import EventSourceResponse
 from app.api.dependencies.db import get_db
 from app.schemas.projects.request import (
     ChatMessageRequest,
+    CreateCharacterRequest,
     CreateProjectRequest,
     GenerateScriptAudioRequest,
+    PinScriptRequest,
     SaveDraftRequest,
     StartRunRequest,
+    UpdateCharacterRequest,
     UpdateScriptRequest,
 )
 from app.schemas.projects.response import (
     AttachmentResponse,
+    CharacterResponse,
     ChatHistoryItem,
     ChatMessageResponse,
     ChatSessionResponse,
@@ -23,6 +27,7 @@ from app.schemas.projects.response import (
     ScriptDetailResponse,
     ScriptLatestResponse,
     ScriptSummaryResponse,
+    StoryContextSummaryResponse,
 )
 from app.schemas.story_analysis.request import StoryAnalysisRequest
 from app.schemas.story_analysis.response import StoryAnalysisResponse
@@ -229,6 +234,75 @@ async def list_scripts(
     db: AsyncSession = Depends(get_db),
 ) -> list[ScriptSummaryResponse]:
     return await _service(request, db).list_scripts(project_id)
+
+
+@router.post(
+    "/{project_id}/scripts/{script_id}/pin",
+    response_model=ScriptSummaryResponse,
+)
+async def pin_script(
+    project_id: str,
+    script_id: str,
+    body: PinScriptRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+) -> ScriptSummaryResponse:
+    return await _service(request, db).pin_script(project_id, script_id, body)
+
+
+@router.get("/{project_id}/characters", response_model=list[CharacterResponse])
+async def list_characters(
+    project_id: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+) -> list[CharacterResponse]:
+    return await _service(request, db).list_characters(project_id)
+
+
+@router.post("/{project_id}/characters", response_model=CharacterResponse)
+async def create_character(
+    project_id: str,
+    body: CreateCharacterRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+) -> CharacterResponse:
+    return await _service(request, db).create_character(project_id, body)
+
+
+@router.patch(
+    "/{project_id}/characters/{character_id}",
+    response_model=CharacterResponse,
+)
+async def update_character(
+    project_id: str,
+    character_id: str,
+    body: UpdateCharacterRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+) -> CharacterResponse:
+    return await _service(request, db).update_character(project_id, character_id, body)
+
+
+@router.delete("/{project_id}/characters/{character_id}", status_code=204)
+async def delete_character(
+    project_id: str,
+    character_id: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+) -> None:
+    await _service(request, db).delete_character(project_id, character_id)
+
+
+@router.get(
+    "/{project_id}/story-context",
+    response_model=StoryContextSummaryResponse,
+)
+async def story_context_summary(
+    project_id: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+) -> StoryContextSummaryResponse:
+    return await _service(request, db).story_context_summary(project_id)
 
 
 @router.get("/{project_id}/scripts/{script_id}", response_model=ScriptDetailResponse)

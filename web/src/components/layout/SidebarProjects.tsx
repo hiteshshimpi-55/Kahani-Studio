@@ -16,7 +16,7 @@ import { cn } from '@/lib/utils'
 
 const PROJECT_LINKS = [
   { segment: 'chat', label: 'Chat', icon: MessageSquareText },
-  { segment: 'context', label: 'Context', icon: Paperclip },
+  { segment: 'context', label: 'Story Bible', icon: Paperclip },
   { segment: 'drafts', label: 'Drafts', icon: FileStack },
   { segment: 'visuals', label: 'Visuals', icon: ImageIcon },
 ] as const

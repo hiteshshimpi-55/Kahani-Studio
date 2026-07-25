@@ -20,6 +20,7 @@ from app.repository.projects import (
     ChatSessionRepository,
     ProjectRepository,
     RunRepository,
+    ScriptRepository,
 )
 from app.schemas.projects.request import ChatMessageRequest
 from app.services.chat.activity import ChatAction, ChatPhase, phases_for_action, pick_phrase
@@ -33,8 +34,10 @@ DEFAULT_NARRATION = {
     "cast_model": "multicast",
     "platform_style": "pocket_fm_serial",
     "soundscape": True,
-    "narrators": [{"id": "NARRATOR", "voice_notes": "calm thriller guide"}],
+    "narrators": [{"id": "NARRATOR", "voice_notes": "intense thriller narrator, measured suspense"}],
 }
+
+DEFAULT_EPISODE_DURATION_SEC = 90
 
 _PHASE_HOLD_MS = {
     "thinking": 0,
@@ -95,6 +98,7 @@ class ChatStreamService:
         self._attachments = AttachmentRepository(session)
         self._sessions = ChatSessionRepository(session)
         self._runs = RunRepository(session)
+        self._scripts = ScriptRepository(session)
 
     async def _require_project(self, project_id: str):
         row = await self._projects.get(project_id)
@@ -264,7 +268,7 @@ class ChatStreamService:
             yield evt
 
         brief = str(analysis.get("generation_brief") or message).strip()
-        part_count = analysis.get("suggested_part_count") or 1
+        part_number = (await self._scripts.max_part_number(project_id)) + 1
 
         run = ProjectRun(
             project_id=project_id,
@@ -272,8 +276,9 @@ class ChatStreamService:
             prompt=brief,
             status="queued",
             narration_config=DEFAULT_NARRATION,
-            part_count=int(part_count) if part_count else 1,
-            total_duration_sec=300,
+            part_count=1,
+            total_duration_sec=DEFAULT_EPISODE_DURATION_SEC,
+            part_number=part_number,
         )
         run = await self._runs.create(run)
         await self._runs.update_status(

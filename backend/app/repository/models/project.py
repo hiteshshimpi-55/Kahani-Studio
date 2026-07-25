@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import uuid4
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import JSON
@@ -39,6 +39,9 @@ class Project(TimestampMixin, Base):
         back_populates="project", cascade="all, delete-orphan"
     )
     scripts: Mapped[list["Script"]] = relationship(
+        back_populates="project", cascade="all, delete-orphan"
+    )
+    characters: Mapped[list["ProjectCharacter"]] = relationship(
         back_populates="project", cascade="all, delete-orphan"
     )
     chat_sessions: Mapped[list["ChatSession"]] = relationship(
@@ -129,6 +132,7 @@ class ProjectRun(TimestampMixin, Base):
     narration_config: Mapped[dict | None] = mapped_column(JsonType, nullable=True)
     part_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
     total_duration_sec: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    part_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
@@ -154,5 +158,36 @@ class Script(TimestampMixin, Base):
     package_json: Mapped[dict] = mapped_column(JsonType, nullable=False, default=dict)
     screenplay_path: Mapped[str] = mapped_column(String(1024), nullable=False)
     storage_dir: Mapped[str] = mapped_column(String(1024), nullable=False)
+    part_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    pinned: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     project: Mapped["Project"] = relationship(back_populates="scripts")
+
+
+class ProjectCharacter(TimestampMixin, Base):
+    """Project-level story cast (series bible characters)."""
+
+    __tablename__ = "project_characters"
+    __table_args__ = (
+        UniqueConstraint("project_id", "character_key", name="uq_project_character_key"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    project_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    character_key: Mapped[str] = mapped_column(String(128), nullable=False)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    role: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    voice: Mapped[str | None] = mapped_column(Text, nullable=True)
+    speech_patterns: Mapped[str | None] = mapped_column(Text, nullable=True)
+    arc: Mapped[str | None] = mapped_column(Text, nullable=True)
+    meta: Mapped[dict | None] = mapped_column(JsonType, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    project: Mapped["Project"] = relationship(back_populates="characters")

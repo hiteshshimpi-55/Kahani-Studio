@@ -6,6 +6,7 @@ from app.repository.models.project import (
     ChatTurn,
     Project,
     ProjectAttachment,
+    ProjectCharacter,
     ProjectRun,
     Script,
 )
@@ -222,7 +223,11 @@ class ScriptRepository:
         result = await self._session.execute(
             select(Script)
             .where(Script.project_id == project_id)
-            .order_by(Script.version.desc(), Script.created_at.desc())
+            .order_by(
+                Script.part_number.desc().nulls_last(),
+                Script.version.desc(),
+                Script.created_at.desc(),
+            )
         )
         return list(result.scalars().all())
 
@@ -238,3 +243,104 @@ class ScriptRepository:
     async def next_version(self, project_id: str) -> int:
         latest = await self.latest_for_project(project_id)
         return (latest.version + 1) if latest else 1
+
+    async def max_part_number(self, project_id: str) -> int:
+        rows = await self.list_for_project(project_id)
+        best = 0
+        for script in rows:
+            if script.part_number and script.part_number > best:
+                best = script.part_number
+            else:
+                package = script.package_json or {}
+                parts = package.get("parts") if isinstance(package, dict) else None
+                if isinstance(parts, list) and parts:
+                    pn = parts[0].get("part_number") if isinstance(parts[0], dict) else None
+                    if isinstance(pn, int) and pn > best:
+                        best = pn
+        return best
+
+    async def set_pinned(self, script_id: str, pinned: bool) -> Script | None:
+        row = await self.get(script_id)
+        if not row:
+            return None
+        row.pinned = pinned
+        await self._session.flush()
+        await self._session.refresh(row)
+        return row
+
+
+class CharacterRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def list_for_project(self, project_id: str) -> list[ProjectCharacter]:
+        result = await self._session.execute(
+            select(ProjectCharacter)
+            .where(ProjectCharacter.project_id == project_id)
+            .order_by(ProjectCharacter.name.asc())
+        )
+        return list(result.scalars().all())
+
+    async def get(self, character_id: str) -> ProjectCharacter | None:
+        return await self._session.get(ProjectCharacter, character_id)
+
+    async def get_by_key(
+        self, project_id: str, character_key: str
+    ) -> ProjectCharacter | None:
+        result = await self._session.execute(
+            select(ProjectCharacter).where(
+                ProjectCharacter.project_id == project_id,
+                ProjectCharacter.character_key == character_key,
+            )
+        )
+        return result.scalar_one_or_none()
+
+    async def create(self, row: ProjectCharacter) -> ProjectCharacter:
+        self._session.add(row)
+        await self._session.flush()
+        await self._session.refresh(row)
+        return row
+
+    async def delete(self, row: ProjectCharacter) -> None:
+        await self._session.delete(row)
+        await self._session.flush()
+
+    async def upsert_from_bible(
+        self, project_id: str, characters: list[dict]
+    ) -> list[ProjectCharacter]:
+        """Merge bible.characters into project cast by character_key (or name)."""
+        out: list[ProjectCharacter] = []
+        for raw in characters:
+            if not isinstance(raw, dict):
+                continue
+            key = str(raw.get("id") or raw.get("character_key") or raw.get("name") or "").strip()
+            name = str(raw.get("name") or key).strip()
+            if not key or not name:
+                continue
+            key = key.lower().replace(" ", "_")
+            existing = await self.get_by_key(project_id, key)
+            if existing:
+                existing.name = name
+                if raw.get("role") is not None:
+                    existing.role = str(raw.get("role") or "") or None
+                if raw.get("voice") is not None:
+                    existing.voice = str(raw.get("voice") or "") or None
+                if raw.get("speech_patterns") is not None:
+                    existing.speech_patterns = str(raw.get("speech_patterns") or "") or None
+                if raw.get("arc") is not None:
+                    existing.arc = str(raw.get("arc") or "") or None
+                await self._session.flush()
+                await self._session.refresh(existing)
+                out.append(existing)
+            else:
+                row = ProjectCharacter(
+                    project_id=project_id,
+                    character_key=key,
+                    name=name,
+                    role=str(raw.get("role") or "") or None,
+                    voice=str(raw.get("voice") or "") or None,
+                    speech_patterns=str(raw.get("speech_patterns") or "") or None,
+                    arc=str(raw.get("arc") or "") or None,
+                )
+                out.append(await self.create(row))
+        return out

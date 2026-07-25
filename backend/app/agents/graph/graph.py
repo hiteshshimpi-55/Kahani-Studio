@@ -27,8 +27,9 @@ async def script_writer_node(state: ProjectGraphState) -> dict[str, Any]:
     package, screenplay = await agent.write(
         source_md=state.get("source_md") or "",
         narration_config=narration,
-        part_count=state.get("part_count") or 4,
-        total_duration_sec=state.get("total_duration_sec") or 600,
+        part_count=1,
+        total_duration_sec=state.get("total_duration_sec") or 90,
+        part_number=state.get("part_number") or 1,
     )
     return {"script_package": package, "screenplay_md": screenplay}
 

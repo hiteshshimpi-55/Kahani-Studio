@@ -20,7 +20,56 @@ def retrieve_context(state: ProjectGraphState) -> dict[str, Any]:
     return {"retrieved_chunks": chunks}
 
 
+def _format_cast(cast: list[dict[str, Any]]) -> list[str]:
+    if not cast:
+        return ["_No series cast yet — invent a tight multicast bible for this episode._"]
+    lines: list[str] = []
+    for ch in cast:
+        name = ch.get("name") or ch.get("character_key") or "UNKNOWN"
+        role = ch.get("role") or ""
+        voice = ch.get("voice") or ""
+        patterns = ch.get("speech_patterns") or ""
+        arc = ch.get("arc") or ""
+        key = ch.get("character_key") or ch.get("id") or ""
+        lines.append(
+            f"- **{name}** (id={key}, role={role})\n"
+            f"  voice: {voice}\n"
+            f"  speech_patterns: {patterns}\n"
+            f"  arc: {arc}"
+        )
+    lines.append("")
+    lines.append(
+        "Reuse these characters (same ids/names/voices). Only add new characters if the story needs them."
+    )
+    return lines
+
+
+def _format_episode(ep: dict[str, Any], *, label: str) -> list[str]:
+    part_no = ep.get("part_number") or "?"
+    title = ep.get("title") or f"Episode {part_no}"
+    cliff = ep.get("cliff_out") or ""
+    excerpt = (ep.get("screenplay_excerpt") or "").strip()
+    lines = [
+        f"### {label}: Part {part_no} — {title}",
+        "",
+    ]
+    if cliff:
+        lines.append(f"**Cliff out:** {cliff}")
+        lines.append("")
+    if excerpt:
+        lines.append("**Screenplay excerpt:**")
+        lines.append("")
+        lines.append(excerpt)
+        lines.append("")
+    return lines
+
+
 def build_source(state: ProjectGraphState) -> dict[str, Any]:
+    part_number = state.get("part_number") or 1
+    duration = state.get("total_duration_sec") or 90
+    cast = state.get("series_cast") or []
+    continuity = state.get("continuity_episodes") or []
+
     lines = [
         "# Generation brief",
         "",
@@ -28,9 +77,41 @@ def build_source(state: ProjectGraphState) -> dict[str, Any]:
         "",
         state["prompt"].strip(),
         "",
-        "## Retrieved context",
+        "## Episode request",
+        "",
+        f"- part_number: {part_number}",
+        f"- target_duration_sec: {duration}",
+        "- Write exactly ONE episode/part for this request.",
+        "",
+        "## Series cast (locked)",
         "",
     ]
+    lines.extend(_format_cast(list(cast)))
+    lines.append("")
+
+    latest = next((e for e in continuity if e.get("is_latest")), None)
+    pinned = [e for e in continuity if e.get("pinned") and not e.get("is_latest")]
+
+    lines.append("## Continuity — previous episode")
+    lines.append("")
+    if latest:
+        lines.extend(_format_episode(latest, label="Latest"))
+        lines.append(
+            "Continue from this cliff. Do not reset the cast or contradict established facts."
+        )
+    else:
+        lines.append("_No prior saved episode — this is the series opener._")
+    lines.append("")
+
+    if pinned:
+        lines.append("## Pinned episodes")
+        lines.append("")
+        for ep in pinned:
+            lines.extend(_format_episode(ep, label="Pinned"))
+        lines.append("")
+
+    lines.append("## Retrieved documents")
+    lines.append("")
     chunks = state.get("retrieved_chunks") or []
     if not chunks:
         lines.append("_No attachment context retrieved._")

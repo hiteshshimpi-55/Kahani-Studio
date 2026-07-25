@@ -1,5 +1,6 @@
 from app.repository.projects.projects import (
     AttachmentRepository,
+    CharacterRepository,
     ChatSessionRepository,
     ChatTurnRepository,
     ProjectRepository,
@@ -10,6 +11,7 @@ from app.repository.projects.projects import (
 __all__ = [
     "ProjectRepository",
     "AttachmentRepository",
+    "CharacterRepository",
     "ChatSessionRepository",
     "ChatTurnRepository",
     "RunRepository",

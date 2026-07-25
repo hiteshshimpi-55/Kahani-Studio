@@ -40,11 +40,12 @@ function historyToMessages(
           role: 'assistant' as const,
           content:
             item.content ||
-            'Script is ready. Review it below — save as a draft when you want to keep it.',
+            'Episode ready. Review below — save as a draft to lock Cast and continuity.',
           createdAt,
           kind: 'script' as const,
           runId: item.run_id ?? undefined,
           scriptPreview: item.script_preview ?? undefined,
+          scriptPackage: (item.script_package as ChatMessage['scriptPackage']) ?? undefined,
           scriptId: item.draft_script_id ?? undefined,
           isDraft: Boolean(item.is_draft),
           status: 'complete' as const,
@@ -94,6 +95,7 @@ function historyToMessages(
       plotPitches: item.plot_pitches ?? undefined,
       runId: item.run_id ?? undefined,
       scriptPreview: item.script_preview ?? undefined,
+      scriptPackage: (item.script_package as ChatMessage['scriptPackage']) ?? undefined,
       scriptId: item.draft_script_id ?? undefined,
       isDraft: Boolean(item.is_draft),
       status: 'complete' as const,
@@ -175,11 +177,21 @@ export function useAgentChat(projectId: string | undefined) {
             if (next.status === 'succeeded') {
               clearTimers()
               const preview = next.screenplay_md || next.screenplay_preview || ''
+              const partNo =
+                next.package &&
+                typeof next.package === 'object' &&
+                Array.isArray(next.package.parts) &&
+                next.package.parts[0] &&
+                typeof next.package.parts[0] === 'object'
+                  ? (next.package.parts[0] as { part_number?: number }).part_number
+                  : undefined
               updateAssistant(assistantId, {
                 activity: null,
-                content:
-                  'Your script is ready. Review it below — save as a draft when you want to keep it.',
+                content: partNo
+                  ? `Episode ${partNo} is ready. Save as a draft to lock Cast and continuity.`
+                  : 'Episode ready. Save as a draft to lock Cast and continuity.',
                 scriptPreview: preview || 'Script generated successfully.',
+                scriptPackage: (next.package as ChatMessage['scriptPackage']) ?? undefined,
                 scriptId: next.draft_script_id ?? undefined,
                 isDraft: Boolean(next.is_draft),
                 kind: 'script',
@@ -516,11 +528,15 @@ export function useAgentChat(projectId: string | undefined) {
       if (!projectId) return undefined
       try {
         const script = await projectsApi.saveRunAsDraft(projectId, runId, screenplay_md)
+        const ep = script.part_number ?? script.package?.parts?.[0]?.part_number
         updateAssistant(assistantId, {
           scriptId: script.id,
           isDraft: true,
           scriptPreview: script.screenplay_md,
-          content: 'Draft saved. You can generate audio, keep editing, or open Drafts / Editor.',
+          scriptPackage: script.package as ChatMessage['scriptPackage'],
+          content: ep
+            ? `Draft saved — Cast updated · Episode ${ep} in Story Bible.`
+            : 'Draft saved — Cast updated in Story Bible.',
         })
         return script
       } catch (e) {
