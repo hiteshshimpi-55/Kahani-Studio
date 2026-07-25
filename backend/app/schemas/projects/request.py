@@ -19,3 +19,9 @@ class UpdateScriptRequest(BaseModel):
 
 class SaveDraftRequest(BaseModel):
     screenplay_md: str | None = None
+
+
+class ProjectAudienceSimRequest(BaseModel):
+    genre: str = Field(default="thriller")
+    language: str = Field(default="hindi")
+    part_count: int = Field(default=5, ge=1, le=20)

@@ -67,3 +67,35 @@ export interface StartRunInput {
   part_count?: number
   total_duration_sec?: number
 }
+
+export interface ConceptSuggestion {
+  title: string
+  tagline: string
+  emotional_hook: string
+}
+
+export interface StoryAnalysis {
+  why_it_works: string[]
+  concepts: ConceptSuggestion[]
+}
+
+export interface ProjectAudienceSimRequest {
+  genre: string
+  language: string
+  part_count: number
+}
+
+export interface ResearchEntry {
+  title: string
+  url: string
+  snippet: string
+  score: number
+}
+
+export interface StoryResearch {
+  project_id: string
+  run_id: string
+  prompt: string
+  queries: Record<string, string>
+  results: Record<string, ResearchEntry[]>
+}

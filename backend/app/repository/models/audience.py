@@ -51,6 +51,7 @@ class SimRun(TimestampMixin, Base):
     )
     episode_id: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
     series_id: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    project_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
 
     status: Mapped[SimRunStatus] = mapped_column(
         SAEnum(SimRunStatus, name="sim_run_status"),

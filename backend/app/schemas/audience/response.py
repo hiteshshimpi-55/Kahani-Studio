@@ -71,6 +71,7 @@ class SimRunSummaryResponse(BaseModel):
     id: str
     episode_id: str
     series_id: str
+    project_id: str | None = None
     status: str
     calibration_status: str
     persona_count: int | None = None
@@ -81,6 +82,7 @@ class SimRunResponse(BaseModel):
     id: str
     episode_id: str
     series_id: str
+    project_id: str | None = None
     status: str
     calibration_status: str
     persona_count: int | None = None

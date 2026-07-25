@@ -28,6 +28,14 @@ async def lifespan(app: FastAPI):
     Path(settings.data_dir).mkdir(parents=True, exist_ok=True)
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        # Additive migrations: columns added after initial table creation
+        from sqlalchemy import text
+        await conn.execute(
+            text("ALTER TABLE sim_runs ADD COLUMN IF NOT EXISTS project_id VARCHAR(36)")
+        )
+        await conn.execute(
+            text("CREATE INDEX IF NOT EXISTS ix_sim_runs_project_id ON sim_runs (project_id)")
+        )
     app.state.redis = await create_pool(_redis_settings())
     log.info("startup_complete", extra={"data_dir": settings.data_dir})
     yield

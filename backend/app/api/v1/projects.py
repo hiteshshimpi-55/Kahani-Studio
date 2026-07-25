@@ -1,8 +1,15 @@
-from fastapi import APIRouter, Depends, File, Request, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies.db import get_db
-from app.schemas.projects.request import CreateProjectRequest, SaveDraftRequest, StartRunRequest, UpdateScriptRequest
+from app.schemas.audience.response import EnqueueSimResponse, SimRunResponse
+from app.schemas.projects.request import (
+    CreateProjectRequest,
+    ProjectAudienceSimRequest,
+    SaveDraftRequest,
+    StartRunRequest,
+    UpdateScriptRequest,
+)
 from app.schemas.projects.response import (
     AttachmentResponse,
     ProjectResponse,
@@ -13,7 +20,9 @@ from app.schemas.projects.response import (
 )
 from app.schemas.story_analysis.request import StoryAnalysisRequest
 from app.schemas.story_analysis.response import StoryAnalysisResponse
+from app.services.audience.service import AudienceService
 from app.services.projects import ProjectsService
+from app.services.projects.research import read_story_research, run_story_research
 from app.services.story_analysis.service import analyze_story as _analyze_story
 
 router = APIRouter(prefix="/projects", tags=["projects"])
@@ -165,3 +174,62 @@ async def story_analysis(
 ) -> StoryAnalysisResponse:
     result = await _analyze_story(body.screenplay_md)
     return StoryAnalysisResponse(**result)
+
+
+def _audience_service(request: Request, db: AsyncSession) -> AudienceService:
+    return AudienceService(redis=getattr(request.app.state, "redis", None), db=db)
+
+
+@router.post("/{project_id}/audience-sim", response_model=EnqueueSimResponse)
+async def trigger_project_audience_sim(
+    project_id: str,
+    body: ProjectAudienceSimRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+) -> EnqueueSimResponse:
+    """Enqueue an audience simulation using the project's latest script."""
+    try:
+        latest = await _service(request, db).latest_script(project_id)
+    except Exception:
+        raise HTTPException(status_code=404, detail="No script found for this project. Generate one first.")
+    return await _audience_service(request, db).enqueue_for_project(
+        project_id=project_id,
+        screenplay_md=latest.screenplay_md,
+        genre=body.genre,
+        language=body.language,
+        part_count=body.part_count,
+    )
+
+
+@router.get("/{project_id}/audience-sim/latest", response_model=SimRunResponse | None)
+async def get_project_audience_sim_latest(
+    project_id: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+) -> SimRunResponse | None:
+    """Return the most-recent audience simulation result for a project."""
+    return await _audience_service(request, db).get_latest_for_project(project_id)
+
+
+@router.post("/{project_id}/runs/{run_id}/research")
+async def trigger_run_research(
+    project_id: str,
+    run_id: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Run Tavily web research for a project run's story plot."""
+    run = await _service(request, db).get_run(project_id, run_id)
+    try:
+        return await run_story_research(project_id, run_id, run.prompt)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+
+
+@router.get("/{project_id}/runs/{run_id}/research")
+async def get_run_research(project_id: str, run_id: str) -> dict:
+    """Return previously generated Tavily research for a run."""
+    data = read_story_research(project_id, run_id)
+    if data is None:
+        raise HTTPException(status_code=404, detail="No research found for this run")
+    return data

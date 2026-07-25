@@ -59,6 +59,7 @@ class AudienceService:
                 id=r.id,
                 episode_id=r.episode_id,
                 series_id=r.series_id,
+                project_id=r.project_id,
                 status=r.status.value,
                 calibration_status=r.calibration_status.value,
                 persona_count=r.persona_count,
@@ -66,6 +67,39 @@ class AudienceService:
             )
             for r in runs
         ]
+
+    async def enqueue_for_project(
+        self,
+        *,
+        project_id: str,
+        screenplay_md: str,
+        genre: str = "thriller",
+        language: str = "hindi",
+        part_count: int = 5,
+    ) -> EnqueueSimResponse:
+        """Create a SimRun linked to a project and enqueue the worker job."""
+        sim_run = await audience_repo.create_sim_run(
+            self._db,
+            episode_id=project_id,
+            series_id=project_id,
+            project_id=project_id,
+        )
+        payload = {
+            "script": screenplay_md,
+            "part_count": part_count,
+            "genre": genre,
+            "language": language,
+            "persona_count": 24,
+        }
+        await self._redis.enqueue_job("audience_sim_job", sim_run.id, payload)
+        return EnqueueSimResponse(sim_run_id=sim_run.id, queued=True)
+
+    async def get_latest_for_project(self, project_id: str) -> SimRunResponse | None:
+        """Return the most-recent sim run for a project."""
+        run = await audience_repo.get_latest_sim_run_for_project(self._db, project_id)
+        if not run:
+            return None
+        return self._to_response(run)
 
     async def decide_patch(self, patch_id: str, accepted: bool) -> PatchResponse | None:
         """Accept or reject a patch."""
@@ -124,6 +158,7 @@ class AudienceService:
             id=run.id,
             episode_id=run.episode_id,
             series_id=run.series_id,
+            project_id=run.project_id,
             status=run.status.value,
             calibration_status=run.calibration_status.value,
             persona_count=run.persona_count,
