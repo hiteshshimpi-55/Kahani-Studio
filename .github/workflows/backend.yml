@@ -48,9 +48,13 @@ jobs:
         id: build
         env:
           ECR_REGISTRY: ${{ steps.ecr.outputs.registry }}
-          ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
+          ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY || 'kahani-studio-production-api' }}
           IMAGE_TAG: ${{ github.sha }}
         run: |
+          if [ -z "$ECR_REPOSITORY" ]; then
+            echo "ECR_REPOSITORY is empty — set the GitHub Actions variable" >&2
+            exit 1
+          fi
           IMAGE_URI="$ECR_REGISTRY/$ECR_REPOSITORY"
           docker build -t "$IMAGE_URI:$IMAGE_TAG" -t "$IMAGE_URI:latest" -f backend/Dockerfile backend
           docker push "$IMAGE_URI:$IMAGE_TAG"
@@ -59,9 +63,9 @@ jobs:
 
       - name: Render and deploy new task definitions
         env:
-          CLUSTER: ${{ vars.ECS_CLUSTER }}
-          SERVICE_API: ${{ vars.ECS_SERVICE_API }}
-          SERVICE_WORKER: ${{ vars.ECS_SERVICE_WORKER }}
+          CLUSTER: ${{ vars.ECS_CLUSTER || 'kahani-studio-production' }}
+          SERVICE_API: ${{ vars.ECS_SERVICE_API || 'kahani-studio-production-api' }}
+          SERVICE_WORKER: ${{ vars.ECS_SERVICE_WORKER || 'kahani-studio-production-worker' }}
           IMAGE: ${{ steps.build.outputs.image }}
         run: |
           set -euo pipefail
