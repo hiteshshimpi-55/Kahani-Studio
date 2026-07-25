@@ -1,8 +1,9 @@
 """Seed Unity Catalog cast_assets and create/sync AI Search index.
 
 Usage (from backend/ with venv):
-  python -m scripts.seed_cast_catalog              # live voices only (requires API key)
+  python -m scripts.seed_cast_catalog              # live ElevenLabs voices (requires API key)
   python -m scripts.seed_cast_catalog --allow-curated  # emergency offline seed (NOT for prod casting)
+  python -m scripts.seed_cast_catalog --sarvam-only    # upsert Sarvam Bulbul v3 voices only
 """
 
 from __future__ import annotations
@@ -26,6 +27,7 @@ from app.integrations.databricks.sql import (
 from app.integrations.elevenlabs.sfx_catalog import curated_sfx_rows
 from app.integrations.elevenlabs.shot_templates import curated_shot_template_rows
 from app.integrations.elevenlabs.voices import collect_voice_rows
+from app.integrations.sarvam.constants import sarvam_voice_rows
 
 configure_logging()
 log = logging.getLogger("seed_cast_catalog")
@@ -36,7 +38,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--allow-curated",
         action="store_true",
-        help="Allow curated voice IDs if live pull fails (unsafe for audiobook casting)",
+        help="Allow curated ElevenLabs voice IDs if live pull fails (unsafe for audiobook casting)",
     )
     parser.add_argument(
         "--free-only",
@@ -58,7 +60,37 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Upsert curated cinematic shot templates without replacing voices/SFX",
     )
+    parser.add_argument(
+        "--sarvam-only",
+        action="store_true",
+        help="Upsert Sarvam Bulbul v3 voices (does not wipe ElevenLabs / SFX)",
+    )
     args = parser.parse_args(argv)
+
+    # ── Sarvam-only upsert (preferred path for Hindi voice catalog) ──
+    if args.sarvam_only:
+        log.info(
+            "seed_sarvam_only catalog=%s schema=%s index=%s",
+            settings.databricks_catalog,
+            settings.databricks_schema,
+            settings.databricks_cast_index_fqn,
+        )
+        table = ensure_cast_schema_and_table()
+        log.info("table_ready %s", table)
+        rows = sarvam_voice_rows()
+        log.info("upserting_sarvam_voices count=%s", len(rows))
+        n = upsert_cast_assets(rows)
+        log.info("sarvam_voices_upserted %s", n)
+        create_or_get_cast_index()
+        sync_cast_index()
+        if args.skip_index_wait:
+            log.info("skip_index_wait — sync triggered; check dashboard for ONLINE")
+            return 0
+        status = wait_until_online(timeout_sec=1800, poll_sec=20)
+        log.info("index_online status=%s", status.get("status"))
+        log.info("describe=%s", describe_index().get("status"))
+        log.info("done — Sarvam voices indexed (preferred over ElevenLabs for Hindi)")
+        return 0
 
     has_key = bool((settings.elevenlabs_api_key or "").strip())
     if (
@@ -68,7 +100,8 @@ def main(argv: list[str] | None = None) -> int:
         and not args.allow_curated
     ):
         log.error(
-            "ELEVENLABS_API_KEY is required. Casting must use live ElevenLabs voice IDs only."
+            "ELEVENLABS_API_KEY is required. Casting must use live ElevenLabs voice IDs only. "
+            "Or use --sarvam-only to seed Sarvam voices."
         )
         return 2
 
@@ -92,16 +125,21 @@ def main(argv: list[str] | None = None) -> int:
     else:
         if args.sfx_only:
             voices: list = []
+            sarvam: list = []
         else:
             voices = collect_voice_rows(
                 free_only=args.free_only,
                 curated_fallback=args.allow_curated,
             )
+            sarvam = sarvam_voice_rows()
         sfx = curated_sfx_rows()
         shots = curated_shot_template_rows()
-        rows = voices + sfx + shots
+        # Sarvam first in the list so they land in the catalog; casting
+        # still prefers them via provider filter at query time.
+        rows = sarvam + voices + sfx + shots
         log.info(
-            "rows_prepared voices=%s sfx=%s shots=%s total=%s",
+            "rows_prepared sarvam=%s elevenlabs=%s sfx=%s shots=%s total=%s",
+            len(sarvam),
             len(voices),
             len(sfx),
             len(shots),
@@ -115,7 +153,6 @@ def main(argv: list[str] | None = None) -> int:
                     len(voices),
                 )
                 return 3
-            # Every voice row must carry a provider_id from ElevenLabs.
             bad = [r for r in voices if not (r.get("provider_id") or "").strip()]
             if bad:
                 log.error("voices_missing_provider_id count=%s", len(bad))
@@ -123,14 +160,14 @@ def main(argv: list[str] | None = None) -> int:
             narr = sum(1 for r in voices if r.get("asset_type") == "narrator_voice")
             char = sum(1 for r in voices if r.get("asset_type") == "character_voice")
             log.info(
-                "voice_type_split narrator=%s character=%s sfx=%s shots=%s",
+                "voice_type_split sarvam=%s narrator=%s character=%s sfx=%s shots=%s",
+                len(sarvam),
                 narr,
                 char,
                 len(sfx),
                 len(shots),
             )
 
-        # Full replace: DELETE all prior rows (curated/stale), then insert live catalog only.
         log.info("clearing_and_replacing_cast_assets…")
         n = replace_cast_assets(rows)
         log.info("rows_replaced %s", n)

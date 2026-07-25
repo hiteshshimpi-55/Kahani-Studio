@@ -53,13 +53,28 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--series-id", default="preview", help="Output subfolder name (default: preview)")
     parser.add_argument("--max-sec", type=float, default=30.0, help="Max preview seconds (default: 30)")
     parser.add_argument("--no-sfx", action="store_true", help="Skip SFX generation")
+    parser.add_argument(
+        "--provider",
+        choices=("sarvam", "elevenlabs"),
+        default="sarvam",
+        help="Voice provider for cast + TTS (default: sarvam)",
+    )
     args = parser.parse_args(argv)
 
-    if not (settings.elevenlabs_api_key or "").strip():
+    if args.provider == "elevenlabs" and not (settings.elevenlabs_api_key or "").strip():
         log.error("ELEVENLABS_API_KEY is not set")
         return 2
+    if args.provider == "sarvam" and not (settings.sarvam_api_key or "").strip():
+        log.error("SARVAM_API_KEY is not set")
+        return 2
+    # SFX still needs ElevenLabs when enabled
+    if not args.no_sfx and not (settings.elevenlabs_api_key or "").strip():
+        log.warning("ELEVENLABS_API_KEY missing — SFX will fail; use --no-sfx or set the key")
 
-    log.info("data_dir=%s  model=%s", settings.data_dir, settings.elevenlabs_default_model_id)
+    log.info(
+        "data_dir=%s  voice_provider=%s",
+        settings.data_dir, args.provider,
+    )
 
     package = load_package(args.script)
     title = package.get("title", "untitled")
@@ -71,16 +86,19 @@ def main(argv: list[str] | None = None) -> int:
         max_sec=args.max_sec,
         concat=True,
         with_sfx=not args.no_sfx,
+        voice_provider=args.provider,
     )
 
     summary = {
         "title": result["title"],
         "language": result["language"],
+        "voice_provider": result.get("voice_provider"),
         "model_id": result["model_id"],
         "line_count": result["line_count"],
         "sfx_cue_count": result["sfx_cue_count"],
         "sfx_clip_count": result.get("sfx_clip_count", 0),
         "voice_map": result["voice_map"],
+        "provider_map": result.get("provider_map"),
         "stems": [
             {
                 "seq_id": s["seq_id"],

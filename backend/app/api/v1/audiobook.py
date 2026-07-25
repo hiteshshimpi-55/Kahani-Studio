@@ -20,6 +20,11 @@ class RenderPreviewRequest(BaseModel):
     series_id: str = Field(default="preview", min_length=1, max_length=128)
     max_sec: float = Field(default=120.0, ge=5, le=600)
     with_sfx: bool = True
+    # Default Sarvam. Pass "elevenlabs" to cast + synthesize only with ElevenLabs.
+    voice_provider: str = Field(
+        default="sarvam",
+        description="sarvam | elevenlabs — which voice catalog + TTS engine to use",
+    )
 
 
 class StemSummary(BaseModel):
@@ -40,11 +45,13 @@ class RenderPreviewResponse(BaseModel):
     series_id: str
     title: str | None
     language: str
+    voice_provider: str
     model_id: str
     line_count: int
     sfx_cue_count: int
     sfx_clip_count: int
     voice_map: dict[str, str]
+    provider_map: dict[str, str] = Field(default_factory=dict)
     preview_mp3: str | None = None
     stems: list[StemSummary]
     sfx_clips: list[SfxClipSummary]
@@ -54,8 +61,11 @@ class RenderPreviewResponse(BaseModel):
 async def render_preview(body: RenderPreviewRequest) -> RenderPreviewResponse:
     """Render a short audiobook preview from a ScriptPackage.
 
-    This is a heavy operation (multiple TTS + SFX API calls + ffmpeg).
-    For production use, prefer the ARQ worker via ``/enqueue``.
+    ``voice_provider`` locks casting + TTS:
+    - ``sarvam`` (default): native Hindi Bulbul v3 voices
+    - ``elevenlabs``: ElevenLabs library voices + v3 emotion tags
+
+    SFX clips still use ElevenLabs sound generation when ``with_sfx=true``.
     """
     result = await asyncio.to_thread(
         AudiobookService().render_preview,
@@ -63,16 +73,19 @@ async def render_preview(body: RenderPreviewRequest) -> RenderPreviewResponse:
         series_id=body.series_id,
         max_sec=body.max_sec,
         with_sfx=body.with_sfx,
+        voice_provider=body.voice_provider,
     )
     return RenderPreviewResponse(
         series_id=result["series_id"],
         title=result["title"],
         language=result["language"],
+        voice_provider=result.get("voice_provider") or body.voice_provider,
         model_id=result["model_id"],
         line_count=result["line_count"],
         sfx_cue_count=result["sfx_cue_count"],
         sfx_clip_count=result.get("sfx_clip_count", 0),
         voice_map=result["voice_map"],
+        provider_map=result.get("provider_map") or {},
         preview_mp3=result.get("preview_mp3"),
         stems=[
             StemSummary(

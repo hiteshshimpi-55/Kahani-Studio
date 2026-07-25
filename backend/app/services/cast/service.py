@@ -25,12 +25,15 @@ CAST_COLUMNS = [
     "tags",
 ]
 
+# Prefer native Indian TTS (Sarvam) over multilingual (ElevenLabs).
+PRIMARY_VOICE_PROVIDER = "sarvam"
+FALLBACK_VOICE_PROVIDER = "elevenlabs"
+
 
 def _parse_sfx_prompt(tags: str | None, description: str | None) -> str | None:
     if tags and "|prompt:" in tags:
         return tags.split("|prompt:", 1)[1].strip() or None
     if description and "ElevenLabs sound effect prompt:" in description:
-        # Extract between marker and "When to use:"
         part = description.split("ElevenLabs sound effect prompt:", 1)[1]
         if "When to use:" in part:
             part = part.split("When to use:", 1)[0]
@@ -57,12 +60,32 @@ def _as_float(value: Any) -> float | None:
         return None
 
 
+def _infer_provider(fields: dict[str, Any]) -> str | None:
+    provider = fields.get("provider")
+    if provider:
+        return str(provider).strip().lower() or None
+    row_id = str(fields.get("id") or "")
+    tags = str(fields.get("tags") or "")
+    desc = str(fields.get("description") or "")
+    if (
+        row_id.startswith("sarvam_")
+        or "sarvam" in tags.lower()
+        or "Provider: sarvam" in desc
+        or "Bulbul v3" in desc
+    ):
+        return "sarvam"
+    if row_id.startswith("voice_") or "elevenlabs" in tags.lower() or "ElevenLabs" in desc:
+        return "elevenlabs"
+    return None
+
+
 def hit_to_candidate(rank: int, fields: dict[str, Any]) -> CastCandidate:
     tags = fields.get("tags")
     description = fields.get("description")
     return CastCandidate(
         rank=rank,
         id=fields.get("id"),
+        provider=_infer_provider(fields),
         provider_id=fields.get("provider_id"),
         name=fields.get("name"),
         asset_type=fields.get("asset_type"),
@@ -80,8 +103,13 @@ def hit_to_candidate(rank: int, fields: dict[str, Any]) -> CastCandidate:
     )
 
 
-def _search(query_text: str, *, asset_type: str, num_results: int = 2) -> list[CastCandidate]:
-    # Standard endpoint filter syntax from Databricks docs.
+def _search(
+    query_text: str,
+    *,
+    asset_type: str,
+    num_results: int = 8,
+) -> list[CastCandidate]:
+    """Vector search by asset_type. Provider preference is applied after ranking."""
     filters: dict[str, Any] = {"asset_type": asset_type}
     result = similarity_search(
         VectorSearchQuery(
@@ -97,30 +125,93 @@ def _search(query_text: str, *, asset_type: str, num_results: int = 2) -> list[C
     candidates: list[CastCandidate] = []
     for i, hit in enumerate(result.hits, start=1):
         fields = dict(hit.raw)
-        # Some responses append score as last anonymous value — already normalized into dict if possible.
         candidates.append(hit_to_candidate(i, fields))
     return candidates
 
 
+def _normalize_voice_provider(value: str | None) -> str:
+    raw = (value or settings.tts_provider or "sarvam").strip().lower()
+    if raw in ("elevenlabs", "11labs", "eleven", "el"):
+        return FALLBACK_VOICE_PROVIDER
+    return PRIMARY_VOICE_PROVIDER
+
+
+def _dedupe_candidates(candidates: list[CastCandidate]) -> list[CastCandidate]:
+    seen: set[str] = set()
+    out: list[CastCandidate] = []
+    for c in candidates:
+        key = (c.provider_id or c.id or "").strip()
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        out.append(c)
+    for i, c in enumerate(out, start=1):
+        c.rank = i
+    return out
+
+
+def _filter_by_provider(
+    candidates: list[CastCandidate],
+    voice_provider: str,
+) -> list[CastCandidate]:
+    """Keep only the requested provider. Infer provider from id/tags when needed."""
+    locked = _normalize_voice_provider(voice_provider)
+    matched = [c for c in candidates if (c.provider or "") == locked]
+    return _dedupe_candidates(matched)
+
+
+def _search_voices(
+    query: str,
+    *,
+    asset_type: str,
+    voice_provider: str = "sarvam",
+) -> list[CastCandidate]:
+    """Search cast catalog locked to one voice provider."""
+    locked = _normalize_voice_provider(voice_provider)
+    if locked == PRIMARY_VOICE_PROVIDER:
+        biased = (
+            f"{query} Sarvam Bulbul v3 native Indian Hindi voice. "
+            f"Provider: sarvam. Speaker from Sarvam catalog."
+        )
+    else:
+        biased = (
+            f"{query} ElevenLabs multilingual audiobook voice. "
+            f"Provider: elevenlabs. ElevenLabs voice_id."
+        )
+
+    raw = _search(biased, asset_type=asset_type, num_results=12)
+    candidates = _filter_by_provider(raw, locked)
+    if candidates:
+        return candidates[:3]
+
+    # Alternate asset type (narrator ↔ character), still locked to provider
+    alt_type = "character_voice" if asset_type == "narrator_voice" else "narrator_voice"
+    raw = _search(biased, asset_type=alt_type, num_results=12)
+    return _filter_by_provider(raw, locked)[:3]
+
+
 class CastService:
     def recommend(self, script: CastScript) -> CastReport:
+        voice_provider = _normalize_voice_provider(script.voice_provider)
         character_results: list[CharacterCastResult] = []
         for ch in script.characters:
             role = (ch.role or "character").lower()
-            asset_type = "narrator_voice" if role == "narrator" else "character_voice"
+            asset_type = "narrator_voice" if role in ("narrator", "guide") else "character_voice"
             query = ch.casting_query.strip()
             if script.language:
                 query = f"{query}. Language preference: {script.language}."
+            if voice_provider == PRIMARY_VOICE_PROVIDER:
+                query = f"{query} Prefer Sarvam Bulbul v3 native Indian voices."
+            else:
+                query = f"{query} Prefer ElevenLabs library voices."
             if ch.gender:
                 query = f"{query} Gender: {ch.gender}."
             if ch.traits:
                 query = f"{query} Traits: {', '.join(ch.traits)}."
 
-            # Try role-specific type first; fall back to the other voice type if empty.
-            candidates = _search(query, asset_type=asset_type, num_results=2)
-            if not candidates:
-                alt_type = "character_voice" if asset_type == "narrator_voice" else "narrator_voice"
-                candidates = _search(query, asset_type=alt_type, num_results=2)
+            candidates = _search_voices(
+                query, asset_type=asset_type, voice_provider=voice_provider,
+            )
 
             character_results.append(
                 CharacterCastResult(
@@ -137,6 +228,7 @@ class CastService:
             query = scene.sfx_query.strip()
             if scene.setting:
                 query = f"{query}. Setting: {scene.setting}."
+            # SFX remains ElevenLabs sound-generation catalog regardless of TTS provider
             candidates = _search(query, asset_type="sfx", num_results=2)
             scene_results.append(
                 SceneSfxResult(
@@ -150,6 +242,7 @@ class CastService:
         return CastReport(
             series_id=script.series_id,
             language=script.language,
+            voice_provider=voice_provider,
             characters=character_results,
             scenes=scene_results,
             index_name=settings.databricks_cast_index_fqn,

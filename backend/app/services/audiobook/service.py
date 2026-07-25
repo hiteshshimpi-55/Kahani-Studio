@@ -31,6 +31,9 @@ from app.core.config import settings
 from app.integrations.elevenlabs.client import get_elevenlabs_client
 from app.integrations.elevenlabs.constants import HINDI_FREE_VOICES, PAID_HINDI_VOICES
 from app.integrations.elevenlabs.sfx import generate_sound_effect
+from app.integrations.sarvam.client import get_sarvam_client
+from app.integrations.sarvam.constants import SARVAM_HINDI_VOICES
+from app.integrations.sarvam.tts import sarvam_tts
 from app.schemas.cast.request import CastCharacter, CastScene, CastScript
 from app.schemas.cast.response import CastReport
 from app.schemas.tts.request import SynthesizeSpeechRequest, VoiceSettingsBody
@@ -302,10 +305,52 @@ def _speed_for_role(role: str, direction: str) -> float | None:
     return None
 
 
+def _sarvam_delivery(role: str, direction: str) -> tuple[float, float]:
+    """Map script direction → (pace, temperature) for Sarvam Bulbul v3.
+
+    Sarvam has no ``[emotion]`` tags. Temperature is the main lever for
+    expressiveness (0.01 flat → 1.0 highly expressive). Storytelling
+    docs recommend ~0.8; we push character emotion higher.
+    """
+    d = (direction or "").lower()
+    role_l = (role or "").lower()
+
+    # Temperature (emotion / prosody)
+    if any(k in d for k in ("passionate", "angry", "shout", "intense", "dramatic")):
+        temperature = 0.95
+    elif any(k in d for k in ("commanding", "firm", "excited", "urgent", "fear")):
+        temperature = 0.88
+    elif any(k in d for k in ("whisper", "sad", "soft", "gentle")):
+        temperature = 0.75
+    elif any(k in d for k in ("calm", "measured", "observational")):
+        temperature = 0.65
+    elif role_l in ("narrator", "guide"):
+        temperature = 0.72  # warm narrator, not flat
+    else:
+        temperature = 0.82  # default character expressiveness
+
+    # Pace (speaking rate)
+    if "slow" in d:
+        pace = 0.82
+    elif any(k in d for k in ("excited", "urgent", "fast")):
+        pace = 1.08
+    elif role_l in ("narrator", "guide"):
+        pace = 0.90
+    elif "commanding" in d or "firm" in d:
+        pace = 0.88  # deliberate authority
+    else:
+        pace = 1.0
+
+    return pace, temperature
+
+
 # ── ScriptPackage → CastScript ──────────────────────────────────────
 
 def package_to_cast_script(
-    package: dict[str, Any], *, series_id: str
+    package: dict[str, Any],
+    *,
+    series_id: str,
+    voice_provider: str = "sarvam",
 ) -> tuple[CastScript, list[str]]:
     """Build a ``CastScript`` from the scripter's output.
 
@@ -392,6 +437,7 @@ def package_to_cast_script(
             series_id=series_id,
             language=language,
             title=package.get("title"),
+            voice_provider=voice_provider,
             characters=characters,
             scenes=scenes,
         ),
@@ -399,94 +445,213 @@ def package_to_cast_script(
     )
 
 
-# ── voice assignment (deduplicated, Hindi-aware) ────────────────────
+# ── voice assignment (deduplicated, Sarvam-first) ───────────────────
 
-def _voice_map_from_cast(report: CastReport) -> dict[str, str]:
-    mapping: dict[str, str] = {}
+def _voice_map_from_cast(
+    report: CastReport,
+) -> tuple[dict[str, str], dict[str, str], dict[str, list[tuple[str, str]]]]:
+    """Return (voice_id_map, provider_map, alternatives_map).
+
+    alternatives_map[character] = [(provider_id, provider), ...] for dedup.
+    """
+    voice_map: dict[str, str] = {}
+    provider_map: dict[str, str] = {}
+    alts: dict[str, list[tuple[str, str]]] = {}
     for ch in report.characters:
+        key = ch.character_id.upper()
+        candidates = []
         if ch.primary and ch.primary.provider_id:
-            mapping[ch.character_id.upper()] = ch.primary.provider_id
-    return mapping
+            candidates.append(ch.primary)
+        candidates.extend(ch.alternatives)
+        if not candidates:
+            continue
+        primary = candidates[0]
+        voice_map[key] = primary.provider_id  # type: ignore[assignment]
+        provider_map[key] = (primary.provider or "elevenlabs").lower()
+        alts[key] = [
+            (c.provider_id, (c.provider or "elevenlabs").lower())
+            for c in candidates[1:]
+            if c.provider_id
+        ]
+        log.info(
+            "voice_from_cast %s → %s (provider=%s name=%s alts=%s)",
+            key,
+            primary.provider_id,
+            provider_map[key],
+            primary.name,
+            [a[0] for a in alts[key][:3]],
+        )
+    return voice_map, provider_map, alts
+
+
+def _normalize_voice_provider(value: str | None) -> str:
+    raw = (value or settings.tts_provider or "sarvam").strip().lower()
+    if raw in ("elevenlabs", "11labs", "eleven", "el"):
+        return "elevenlabs"
+    return "sarvam"
 
 
 def _assign_voices(
     bible_chars: list[dict[str, Any]],
     cast_characters: list[CastCharacter],
     cast_map: dict[str, str],
+    cast_providers: dict[str, str],
     language: str,
     *,
+    voice_provider: str = "sarvam",
+    cast_alternatives: dict[str, list[tuple[str, str]]] | None = None,
     prefer_paid: bool = False,
-) -> dict[str, str]:
-    """Assign a distinct voice to every character.
+) -> tuple[dict[str, str], dict[str, str]]:
+    """Assign a distinct voice to every character for one locked provider.
 
-    Priority order:
-    1. ``voice_id`` explicitly set in the character bible → use directly
-    2. Cast search result from vector DB → use if unique
-    3. Curated free-tier pool → fill remaining characters
+    Priority order (within ``voice_provider`` only):
+    1. ``voice_id`` explicitly set in the character bible (same provider)
+    2. Cast search primary
+    3. Cast search alternatives (for dedup)
+    4. Local provider pool
 
-    This ensures the scripter can lock in specific voices while
-    unknown characters still get auto-assigned.
+    Returns (voice_map, provider_map).
     """
+    locked = _normalize_voice_provider(voice_provider)
     assigned: dict[str, str] = {}
+    providers: dict[str, str] = {}
     used_ids: set[str] = set()
+    alts = cast_alternatives or {}
 
-    # Pass 1: honour explicit voice_id from the bible
+    def _is_locked_provider(prov: str | None, vid: str) -> bool:
+        p = (prov or "").lower()
+        if p == locked:
+            return True
+        # Infer from id shape when cast didn't tag provider
+        if locked == "sarvam":
+            return bool(vid) and vid.replace("_", "").isalpha() and vid.islower()
+        return bool(vid) and not (vid.replace("_", "").isalpha() and vid.islower())
+
+    # Pass 1: honour explicit voice_id from the bible (same provider only)
     for ch in bible_chars:
         vid = (ch.get("voice_id") or "").strip()
         if not vid:
             continue
         cid = str(ch.get("id") or ch.get("name") or "").strip().upper().replace(" ", "_")
-        if cid:
-            assigned[cid] = vid
-            used_ids.add(vid)
-            log.info("voice_from_bible %s → %s", cid, vid)
+        if not cid:
+            continue
+        bible_prov = (ch.get("voice_provider") or "").lower() or (
+            "sarvam" if vid.isalpha() and vid.islower() else "elevenlabs"
+        )
+        if bible_prov != locked:
+            continue
+        assigned[cid] = vid
+        used_ids.add(vid)
+        providers[cid] = locked
+        log.info("voice_from_bible %s → %s (%s)", cid, vid, locked)
 
-    # Pass 2: fill from cast search (deduplicated)
+    # Pass 2: cast search primary / alternatives (filter to locked provider)
     for ch in cast_characters:
         key = ch.id.upper()
         if key in assigned:
             continue
         vid = cast_map.get(key)
-        if vid and vid not in used_ids:
+        prov = cast_providers.get(key, locked)
+        if vid and vid not in used_ids and _is_locked_provider(prov, vid):
             assigned[key] = vid
             used_ids.add(vid)
-            log.info("voice_from_cast %s → %s", key, vid)
+            providers[key] = locked
+            log.info("voice_from_cast %s → %s (%s)", key, vid, locked)
+        else:
+            for alt_id, alt_prov in alts.get(key, []):
+                if alt_id in used_ids:
+                    continue
+                if not _is_locked_provider(alt_prov, alt_id):
+                    continue
+                assigned[key] = alt_id
+                used_ids.add(alt_id)
+                providers[key] = locked
+                log.info(
+                    "voice_from_cast_alt %s → %s (%s) [primary taken/mismatched]",
+                    key, alt_id, locked,
+                )
+                break
 
-    # Pass 3: fill remaining from curated pool
-    is_hindi = (language or "").lower().startswith("hi")
-    pool = list(HINDI_FREE_VOICES) if is_hindi else list(HINDI_FREE_VOICES)
+    # Pass 3: provider-specific local pool
+    desc_by_id: dict[str, str] = {}
+    for bch in bible_chars:
+        cid = str(bch.get("id") or bch.get("name") or "").strip().upper().replace(" ", "_")
+        desc_by_id[cid] = f"{bch.get('role', '')} {bch.get('voice', '')}".lower()
 
+    if locked == "sarvam":
+        for ch in cast_characters:
+            key = ch.id.upper()
+            if key in assigned:
+                continue
+            role = (ch.role or "character").lower()
+            desc = desc_by_id.get(key, role)
+            best = None
+            best_score = -1
+            for v in SARVAM_HINDI_VOICES:
+                spk = v["speaker"]
+                if spk in used_ids:
+                    continue
+                score = 0
+                if role in ("narrator", "guide") and "narrator" in v["best_for"]:
+                    score += 3
+                if "young" in desc and "young" in v["style"]:
+                    score += 4
+                if "energetic" in desc and "energetic" in v["style"]:
+                    score += 3
+                if "elder" in desc or "wise" in desc:
+                    if "mature" in v["style"] or "deep" in v["style"] or "authoritative" in v["style"]:
+                        score += 3
+                if "calm" in desc and "calm" in v["style"]:
+                    score += 2
+                if v["speaker"] == "varun" and "villain" not in desc:
+                    score -= 5
+                if score > best_score:
+                    best_score = score
+                    best = v
+            if best:
+                assigned[key] = best["speaker"]
+                used_ids.add(best["speaker"])
+                providers[key] = "sarvam"
+                log.info("voice_from_sarvam_pool %s → %s (%s)", key, best["speaker"], best["style"])
+    else:
+        pool = list(HINDI_FREE_VOICES)
+        for ch in cast_characters:
+            key = ch.id.upper()
+            if key in assigned:
+                continue
+            role = (ch.role or "character").lower()
+            for v in pool:
+                if v["id"] in used_ids:
+                    continue
+                if role == "narrator" and "narrator" not in v["style"]:
+                    continue
+                assigned[key] = v["id"]
+                used_ids.add(v["id"])
+                providers[key] = "elevenlabs"
+                log.info("voice_from_elevenlabs_pool %s → %s (%s)", key, v["name"], v["style"])
+                break
+            if key not in assigned:
+                for v in pool:
+                    if v["id"] not in used_ids:
+                        assigned[key] = v["id"]
+                        used_ids.add(v["id"])
+                        providers[key] = "elevenlabs"
+                        log.info("voice_from_elevenlabs_pool %s → %s (fallback)", key, v["name"])
+                        break
+
+    # Last resort within locked provider
     for ch in cast_characters:
         key = ch.id.upper()
         if key in assigned:
             continue
-        role = (ch.role or "character").lower()
-        # Try to match style (narrator gets narrator-style voices)
-        for v in pool:
-            if v["id"] in used_ids:
-                continue
-            if role == "narrator" and "narrator" not in v["style"]:
-                continue
-            assigned[key] = v["id"]
-            used_ids.add(v["id"])
-            log.info("voice_from_pool %s → %s (%s)", key, v["name"], v["style"])
-            break
-        # If no style match, take any unused
-        if key not in assigned:
-            for v in pool:
-                if v["id"] not in used_ids:
-                    assigned[key] = v["id"]
-                    used_ids.add(v["id"])
-                    log.info("voice_from_pool %s → %s (fallback)", key, v["name"])
-                    break
+        if locked == "sarvam" and SARVAM_HINDI_VOICES:
+            assigned[key] = SARVAM_HINDI_VOICES[0]["speaker"]
+            providers[key] = "sarvam"
+        elif HINDI_FREE_VOICES:
+            assigned[key] = HINDI_FREE_VOICES[0]["id"]
+            providers[key] = "elevenlabs"
 
-    # Last resort: reuse first pool voice
-    for ch in cast_characters:
-        key = ch.id.upper()
-        if key not in assigned:
-            assigned[key] = pool[0]["id"]
-
-    return assigned
+    return assigned, providers
 
 
 def _deduplicate_cast_map(
@@ -507,7 +672,8 @@ def _deduplicate_cast_map(
             dupes.append(key)
 
     if dupes:
-        fallback_pool = [v["id"] for v in HINDI_FREE_VOICES if v["id"] not in used]
+        fallback_pool = [v["speaker"] for v in SARVAM_HINDI_VOICES if v["speaker"] not in used]
+        fallback_pool += [v["id"] for v in HINDI_FREE_VOICES if v["id"] not in used]
         for key in dupes:
             if fallback_pool:
                 result[key] = fallback_pool.pop(0)
@@ -524,6 +690,77 @@ def _match_voice(speaker: str, voice_map: dict[str, str], default: str) -> str:
         if k in key or key in k:
             return v
     return default
+
+
+# ── Sarvam local pool fallback (when vector DB unavailable) ──────────
+
+def _assign_sarvam_voices(
+    bible_chars: list[dict[str, Any]],
+    cast_characters: list[CastCharacter],
+) -> dict[str, str]:
+    """Assign Sarvam Bulbul v3 speaker names from local catalog (offline fallback)."""
+    assigned: dict[str, str] = {}
+    used: set[str] = set()
+    pool = list(SARVAM_HINDI_VOICES)
+
+    desc_by_id: dict[str, str] = {}
+    for ch in bible_chars:
+        cid = str(ch.get("id") or ch.get("name") or "").strip().upper().replace(" ", "_")
+        voice_desc = str(ch.get("voice") or "").lower()
+        role = str(ch.get("role") or "").lower()
+        desc_by_id[cid] = f"{role} {voice_desc}"
+
+    for ch in cast_characters:
+        key = ch.id.upper()
+        if key in assigned:
+            continue
+        role = (ch.role or "character").lower()
+        desc = desc_by_id.get(key, role)
+
+        best: dict[str, str] | None = None
+        best_score = -1
+
+        for v in pool:
+            if v["speaker"] in used:
+                continue
+            score = 0
+            if role in ("narrator", "guide") and "narrator" in v["best_for"]:
+                score += 3
+            if "elder" in desc and ("mature" in v["style"] or "deep" in v["style"]):
+                score += 3
+            if "young" in desc and "young" in v["style"]:
+                score += 3
+            if "wise" in desc and ("mature" in v["style"] or "authoritative" in v["style"]):
+                score += 2
+            if "energetic" in desc and "energetic" in v["style"]:
+                score += 2
+            if "calm" in desc and "calm" in v["style"]:
+                score += 2
+            if "deep" in desc and "deep" in v["style"]:
+                score += 2
+            if "commanding" in desc and "authoritative" in v["style"]:
+                score += 2
+            if "female" in desc and v["gender"] == "female":
+                score += 5
+            elif "male" in desc and v["gender"] == "male":
+                score += 5
+            elif v["gender"] == "male":
+                score += 1
+            if v["speaker"] == "varun" and "villain" not in desc and "antagonist" not in desc:
+                score -= 5
+            if score > best_score:
+                best_score = score
+                best = v
+
+        if best:
+            assigned[key] = best["speaker"]
+            used.add(best["speaker"])
+            log.info("sarvam_voice %s → %s (%s)", key, best["speaker"], best["style"])
+        else:
+            assigned[key] = "shubh"
+            log.info("sarvam_voice %s → shubh (fallback)", key)
+
+    return assigned
 
 
 # ── ffmpeg helpers ───────────────────────────────────────────────────
@@ -652,6 +889,7 @@ class AudiobookService:
         concat: bool = True,
         with_sfx: bool = True,
         prefer_account_voices: bool = False,
+        voice_provider: str | None = None,
     ) -> dict[str, Any]:
         parts = package.get("parts") or []
         if not parts:
@@ -667,32 +905,67 @@ class AudiobookService:
             ln.seq_id for ln in slice_lines_for_duration(parsed.lines, max_sec=max_sec)
         }
         language = str(package.get("language") or "hi")[:2]
-        model_id = settings.elevenlabs_default_model_id
+        locked_provider = _normalize_voice_provider(voice_provider)
+        has_sarvam = bool(settings.sarvam_api_key)
+        has_eleven = bool(settings.elevenlabs_api_key)
 
-        # ── 1. Cast: find best voices ───────────────────────────────
-        cast_script, sfx_cues = package_to_cast_script(package, series_id=series_id)
-        log.info(
-            "casting characters=%s language=%s model=%s",
-            [c.id for c in cast_script.characters],
-            cast_script.language, model_id,
+        if locked_provider == "sarvam" and not has_sarvam:
+            raise ValueError("voice_provider=sarvam but SARVAM_API_KEY is not set")
+        if locked_provider == "elevenlabs" and not has_eleven:
+            raise ValueError("voice_provider=elevenlabs but ELEVENLABS_API_KEY is not set")
+
+        # ── 1. Cast: vector DB locked to chosen provider ─────────────
+        cast_script, sfx_cues = package_to_cast_script(
+            package, series_id=series_id, voice_provider=locked_provider,
         )
-
-        report = CastService().recommend(cast_script)
-        cast_map = _voice_map_from_cast(report)
         bible_chars = (package.get("bible") or {}).get("characters") or []
-        voice_map = _assign_voices(
+
+        cast_map: dict[str, str] = {}
+        cast_providers: dict[str, str] = {}
+        cast_alts: dict[str, list[tuple[str, str]]] = {}
+        try:
+            report = CastService().recommend(cast_script)
+            cast_map, cast_providers, cast_alts = _voice_map_from_cast(report)
+            log.info(
+                "cast_search_ok provider=%s characters=%s hits=%s",
+                locked_provider,
+                [c.id for c in cast_script.characters],
+                len(cast_map),
+            )
+        except Exception:
+            log.exception(
+                "cast_search_failed provider=%s — falling back to local pool",
+                locked_provider,
+            )
+
+        voice_map, provider_map = _assign_voices(
             bible_chars,
             cast_script.characters,
             cast_map,
+            cast_providers,
             cast_script.language,
+            voice_provider=locked_provider,
+            cast_alternatives=cast_alts,
             prefer_paid=prefer_account_voices,
         )
-        default_voice = settings.elevenlabs_default_voice_id
-        log.info("voice_map=%s default=%s", voice_map, default_voice)
+
+        default_voice = (
+            settings.sarvam_default_speaker
+            if locked_provider == "sarvam"
+            else settings.elevenlabs_default_voice_id
+        )
+        sarvam_client = get_sarvam_client() if locked_provider == "sarvam" else None
+        model_id = (
+            "bulbul:v3" if locked_provider == "sarvam"
+            else settings.elevenlabs_default_model_id
+        )
+
+        log.info(
+            "voice_provider=%s voice_map=%s provider_map=%s default=%s",
+            locked_provider, voice_map, provider_map, default_voice,
+        )
 
         # Stable vocal personality tag per character (from the bible).
-        # This is prepended to every line's emotion direction so the v3
-        # model keeps a consistent "voice lane" for each character.
         char_base_tags = _build_character_base_tags(bible_chars)
         log.info("char_base_tags=%s", char_base_tags)
 
@@ -794,33 +1067,65 @@ class AudiobookService:
                     continue
 
                 voice_id = _match_voice(line.speaker, voice_map, default_voice)
-                base_tag = char_base_tags.get(line.speaker.upper(), "")
-                spoken = _v3_tagged_text(
-                    line.direction, line.text, base_tag=base_tag,
-                )
-                stability = _stability_for_direction(line.direction)
                 role = role_by_id.get(line.speaker.upper(), "character")
-                speed = _speed_for_role(role, line.direction)
+                line_provider = provider_map.get(line.speaker.upper(), locked_provider)
+                use_sarvam_line = line_provider == "sarvam" and sarvam_client is not None
 
-                result = tts.synthesize(
-                    SynthesizeSpeechRequest(
+                stem_path_out = str(out_dir / f"{line.seq_id}.mp3")
+
+                if use_sarvam_line:
+                    # Sarvam: no [emotion] tags — drive delivery via temperature + pace
+                    spoken = line.text
+                    pace, temperature = _sarvam_delivery(role, line.direction)
+
+                    lang_code = "hi-IN" if language.startswith("hi") else "en-IN"
+                    audio_bytes = sarvam_tts(
+                        sarvam_client,
                         text=spoken,
-                        voice_id=voice_id,
-                        model_id=model_id,
-                        language_code=language,
-                        series_id=series_id,
-                        seq_id=line.seq_id,
-                        seed=voice_seeds.get(voice_id),
-                        voice_settings=VoiceSettingsBody(
-                            stability=stability,
-                            similarity_boost=0.85,
-                            use_speaker_boost=True,
-                            speed=speed,
-                        ),
+                        speaker=voice_id,
+                        language_code=lang_code,
+                        pace=pace,
+                        temperature=temperature,
+                        sample_rate=44100,
                     )
-                )
+                    Path(stem_path_out).write_bytes(audio_bytes)
+                    # Sarvam returns WAV — normalize to mono mp3
+                    stem_norm = str(out_dir / f"{line.seq_id}_norm.mp3")
+                    _normalize_to_mono(stem_path_out, stem_norm)
+                    stem_path_out = stem_norm
+                    stem_size = Path(stem_path_out).stat().st_size
+                    log.info(
+                        "sarvam_delivery %s dir=%s pace=%.2f temp=%.2f",
+                        line.seq_id, line.direction or "-", pace, temperature,
+                    )
+                else:
+                    # ElevenLabs: use v3 tags + voice settings
+                    base_tag = char_base_tags.get(line.speaker.upper(), "")
+                    spoken = _v3_tagged_text(
+                        line.direction, line.text, base_tag=base_tag,
+                    )
+                    stability = _stability_for_direction(line.direction)
+                    speed = _speed_for_role(role, line.direction)
 
-                stem_size = Path(result.path).stat().st_size
+                    result = tts.synthesize(
+                        SynthesizeSpeechRequest(
+                            text=spoken,
+                            voice_id=voice_id,
+                            model_id=settings.elevenlabs_default_model_id,
+                            language_code=language,
+                            series_id=series_id,
+                            seq_id=line.seq_id,
+                            seed=voice_seeds.get(voice_id),
+                            voice_settings=VoiceSettingsBody(
+                                stability=stability,
+                                similarity_boost=0.85,
+                                use_speaker_boost=True,
+                                speed=speed,
+                            ),
+                        )
+                    )
+                    stem_path_out = result.path
+                    stem_size = Path(result.path).stat().st_size
                 stems.append({
                     "seq_id": line.seq_id,
                     "speaker": line.speaker,
@@ -828,14 +1133,13 @@ class AudiobookService:
                     "text": line.text,
                     "spoken_text": spoken,
                     "voice_id": voice_id,
-                    "path": result.path,
+                    "path": stem_path_out,
                     "bytes": stem_size,
                 })
                 log.info(
-                    "stem %s speaker=%s voice=%s tag=%s spd=%s bytes=%d",
+                    "stem %s speaker=%s voice=%s provider=%s bytes=%d",
                     line.seq_id, line.speaker, voice_id,
-                    line.direction or "-",
-                    f"{speed:.2f}" if speed else "default",
+                    line_provider,
                     stem_size,
                 )
 
@@ -851,7 +1155,7 @@ class AudiobookService:
                     if pause > 0:
                         timeline_segments.append(_get_silence(pause))
 
-                timeline_segments.append(result.path)
+                timeline_segments.append(stem_path_out)
                 prev_speaker = line.speaker
                 prev_text = line.text
                 prev_was_sfx = False
@@ -876,13 +1180,15 @@ class AudiobookService:
             "series_id": series_id,
             "title": package.get("title"),
             "language": language,
+            "voice_provider": locked_provider,
+            "tts_provider": locked_provider,
             "model_id": model_id,
             "max_sec": max_sec,
             "line_count": len(stems),
             "sfx_cue_count": len(sfx_cues),
             "sfx_clip_count": len(sfx_clips),
             "voice_map": voice_map,
-            "cast": report.model_dump(mode="json"),
+            "provider_map": provider_map,
             "stems": stems,
             "sfx_clips": sfx_clips,
             "preview_mp3": preview_path if stems else None,

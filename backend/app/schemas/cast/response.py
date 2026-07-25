@@ -4,6 +4,7 @@ from pydantic import BaseModel, Field
 class CastCandidate(BaseModel):
     rank: int
     id: str | None = None
+    provider: str | None = None
     provider_id: str | None = None
     name: str | None = None
     asset_type: str | None = None
@@ -35,6 +36,7 @@ class SceneSfxResult(BaseModel):
 class CastReport(BaseModel):
     series_id: str
     language: str
+    voice_provider: str = "sarvam"
     characters: list[CharacterCastResult]
     scenes: list[SceneSfxResult]
     index_name: str

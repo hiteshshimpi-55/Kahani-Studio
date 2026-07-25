@@ -16,6 +16,7 @@ log = logging.getLogger(__name__)
 COLUMNS_TO_SYNC = [
     "id",
     "asset_type",
+    "provider",
     "provider_id",
     "name",
     "language",
