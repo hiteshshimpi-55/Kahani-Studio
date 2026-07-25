@@ -11,7 +11,10 @@ from app.schemas.projects.response import (
     ScriptLatestResponse,
     ScriptSummaryResponse,
 )
+from app.schemas.story_analysis.request import StoryAnalysisRequest
+from app.schemas.story_analysis.response import StoryAnalysisResponse
 from app.services.projects import ProjectsService
+from app.services.story_analysis.service import analyze_story as _analyze_story
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 
@@ -152,3 +155,13 @@ async def update_script(
     db: AsyncSession = Depends(get_db),
 ) -> ScriptDetailResponse:
     return await _service(request, db).update_script(project_id, script_id, body)
+
+
+@router.post("/{project_id}/runs/{run_id}/story-analysis", response_model=StoryAnalysisResponse)
+async def story_analysis(
+    project_id: str,
+    run_id: str,
+    body: StoryAnalysisRequest,
+) -> StoryAnalysisResponse:
+    result = await _analyze_story(body.screenplay_md)
+    return StoryAnalysisResponse(**result)
