@@ -1,8 +1,7 @@
-import { Moon, Sun } from 'lucide-react'
-import { useTheme } from 'next-themes'
 import { useEffect, useId, useRef, useState } from 'react'
 
 import { BrandMark } from '@/components/brand/BrandMark'
+import { ThemeSwitcher } from '@/components/theme/ThemeSwitcher'
 import { cn } from '@/lib/utils'
 
 type Props = {
@@ -15,7 +14,6 @@ export function ProfileMenu({ collapsed, className }: Props) {
   const [open, setOpen] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
   const menuId = useId()
-  const { theme, setTheme, resolvedTheme } = useTheme()
 
   useEffect(() => {
     if (!open) return
@@ -32,8 +30,6 @@ export function ProfileMenu({ collapsed, className }: Props) {
       window.removeEventListener('keydown', onKey)
     }
   }, [open])
-
-  const isDark = resolvedTheme === 'dark'
 
   return (
     <div ref={rootRef} className={cn('relative', className)}>
@@ -84,44 +80,7 @@ export function ProfileMenu({ collapsed, className }: Props) {
           </div>
 
           <div className="border-b border-[var(--folio-border)] px-3.5 py-3">
-            <p className="text-[11px] font-medium tracking-wide text-[var(--text-muted)] uppercase">
-              Theme
-            </p>
-            <div className="mt-2 flex gap-1.5">
-              {([
-                { id: 'light', label: 'Light', icon: Sun },
-                { id: 'dark', label: 'Dark', icon: Moon },
-                { id: 'system', label: 'System', icon: null },
-              ] as const).map((opt) => {
-                const active = theme === opt.id
-                const Icon = opt.icon
-                return (
-                  <button
-                    key={opt.id}
-                    type="button"
-                    role="menuitem"
-                    onClick={() => setTheme(opt.id)}
-                    className={cn(
-                      'flex flex-1 items-center justify-center gap-1 rounded-[6px] px-2 py-1.5 text-[11px] font-medium transition-colors',
-                      active
-                        ? 'bg-[var(--brand)] text-white'
-                        : 'bg-[var(--surface-1)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]',
-                    )}
-                  >
-                    {Icon ? <Icon className="h-3 w-3" /> : null}
-                    {opt.label}
-                  </button>
-                )
-              })}
-            </div>
-            <button
-              type="button"
-              role="menuitem"
-              onClick={() => setTheme(isDark ? 'light' : 'dark')}
-              className="mt-2 w-full rounded-[6px] px-2 py-1.5 text-left text-[12px] text-[var(--text-secondary)] hover:bg-[var(--surface-1)] hover:text-[var(--text-primary)]"
-            >
-              Quick toggle → {isDark ? 'Light' : 'Dark'}
-            </button>
+            <ThemeSwitcher />
           </div>
 
           <div className="px-3.5 py-3">

@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom'
 import { useTheme } from 'next-themes'
 
 import { BrandMark } from '@/components/brand/BrandMark'
+import { ThemeSwitcher } from '@/components/theme/ThemeSwitcher'
 import { cn } from '@/lib/utils'
 
 type Section = 'profile' | 'preferences' | 'about'
@@ -13,9 +14,21 @@ type Props = {
   onClose: () => void
 }
 
+const BACKDROP_STYLE = {
+  backgroundColor: 'rgba(28, 25, 23, 0.42)',
+  backdropFilter: 'blur(16px) saturate(1.25)',
+  WebkitBackdropFilter: 'blur(16px) saturate(1.25)',
+} as const
+
+const BACKDROP_STYLE_DARK = {
+  backgroundColor: 'rgba(0, 0, 0, 0.55)',
+  backdropFilter: 'blur(18px) saturate(1.3)',
+  WebkitBackdropFilter: 'blur(18px) saturate(1.3)',
+} as const
+
 export function SettingsSheet({ open, onClose }: Props) {
   const [section, setSection] = useState<Section>('profile')
-  const { theme, setTheme } = useTheme()
+  const { resolvedTheme } = useTheme()
 
   useEffect(() => {
     if (!open) return
@@ -33,12 +46,15 @@ export function SettingsSheet({ open, onClose }: Props) {
 
   if (!open) return null
 
+  const backdropStyle = resolvedTheme === 'dark' ? BACKDROP_STYLE_DARK : BACKDROP_STYLE
+
   return createPortal(
     <div className="fixed inset-0 z-[100] flex justify-end">
+      <div className="settings-backdrop absolute inset-0" style={backdropStyle} aria-hidden />
       <button
         type="button"
         aria-label="Close settings"
-        className="settings-backdrop absolute inset-0 overlay-backdrop"
+        className="absolute inset-0 z-[1] cursor-default bg-transparent"
         onClick={onClose}
       />
       <aside
@@ -130,23 +146,11 @@ export function SettingsSheet({ open, onClose }: Props) {
             {section === 'preferences' && (
               <div>
                 <h3 className="text-[14px] font-semibold">Preferences</h3>
-                <p className="mt-1 text-[12px] text-[var(--text-secondary)]">Theme for the studio.</p>
-                <div className="mt-5 flex gap-2">
-                  {(['light', 'dark', 'system'] as const).map((value) => (
-                    <button
-                      key={value}
-                      type="button"
-                      onClick={() => setTheme(value)}
-                      className={cn(
-                        'rounded-[6px] px-3 py-1.5 text-[12px] font-medium capitalize transition-colors',
-                        theme === value
-                          ? 'bg-[var(--brand)] text-white'
-                          : 'bg-[var(--surface-1)] text-[var(--text-primary)] hover:bg-[var(--surface-0)]',
-                      )}
-                    >
-                      {value}
-                    </button>
-                  ))}
+                <p className="mt-1 text-[12px] text-[var(--text-secondary)]">
+                  Appearance for the studio.
+                </p>
+                <div className="mt-5">
+                  <ThemeSwitcher />
                 </div>
               </div>
             )}

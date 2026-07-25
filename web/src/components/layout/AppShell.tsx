@@ -13,7 +13,6 @@ import { Link, Outlet, useLocation } from 'react-router-dom'
 import { BrandMark } from '@/components/brand/BrandMark'
 import { NavSearch } from '@/components/layout/NavSearch'
 import { SidebarProjects } from '@/components/layout/SidebarProjects'
-import { ThemeToggle } from '@/components/theme/ThemeToggle'
 import { ProfileMenu } from '@/features/settings/components/ProfileMenu'
 import { cn } from '@/lib/utils'
 
@@ -155,7 +154,6 @@ export function AppShell() {
           </div>
 
           <div className="col-start-2 flex items-center justify-end gap-1 md:col-start-3">
-            <ThemeToggle />
             <div className="md:hidden">
               <ProfileMenu collapsed />
             </div>
