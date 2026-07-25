@@ -17,7 +17,7 @@ type Props = {
   className?: string
 }
 
-/** Light / Dark switch — no system, no separate quick toggle. */
+/** Light / Dark segmented switch — no system mode, no quick-toggle row. */
 export function ThemeSwitcher({ className }: Props) {
   const { resolvedTheme, setTheme } = useTheme()
   const mounted = useIsClient()
@@ -26,42 +26,42 @@ export function ThemeSwitcher({ className }: Props) {
   return (
     <div className={cn('flex items-center justify-between gap-3', className)}>
       <span className="text-[13px] font-medium text-[var(--text-primary)]">Theme</span>
-      <button
-        type="button"
-        role="switch"
-        aria-checked={isDark}
-        aria-label={isDark ? 'Dark theme' : 'Light theme'}
-        disabled={!mounted}
-        onClick={() => setTheme(isDark ? 'light' : 'dark')}
-        className={cn(
-          'relative inline-flex h-8 w-[88px] shrink-0 items-center rounded-full p-1 transition-colors',
-          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand)]/40',
-          isDark ? 'bg-[var(--ink)]' : 'bg-[var(--surface-1)] ring-1 ring-[var(--folio-border)]',
-        )}
+      <div
+        role="group"
+        aria-label="Theme"
+        className="inline-flex h-8 items-center rounded-full bg-[var(--surface-1)] p-0.5"
       >
-        <span
+        <button
+          type="button"
+          disabled={!mounted}
+          aria-pressed={!isDark}
+          onClick={() => setTheme('light')}
           className={cn(
-            'absolute top-1 bottom-1 w-[calc(50%-4px)] rounded-full bg-[var(--surface-2)] shadow-sm transition-transform duration-200',
-            isDark ? 'translate-x-[calc(100%+4px)]' : 'translate-x-0',
-          )}
-        />
-        <span
-          className={cn(
-            'relative z-[1] flex w-1/2 items-center justify-center text-[11px] font-semibold transition-colors',
-            !isDark ? 'text-[var(--text-primary)]' : 'text-[var(--text-muted)]',
+            'h-7 min-w-[52px] rounded-full px-2.5 text-[11px] font-semibold transition-colors',
+            'border-0 outline-none focus-visible:outline-none',
+            !isDark
+              ? 'bg-[var(--surface-2)] text-[var(--text-primary)] shadow-sm'
+              : 'bg-transparent text-[var(--text-muted)] hover:text-[var(--text-secondary)]',
           )}
         >
           Light
-        </span>
-        <span
+        </button>
+        <button
+          type="button"
+          disabled={!mounted}
+          aria-pressed={isDark}
+          onClick={() => setTheme('dark')}
           className={cn(
-            'relative z-[1] flex w-1/2 items-center justify-center text-[11px] font-semibold transition-colors',
-            isDark ? 'text-white' : 'text-[var(--text-muted)]',
+            'h-7 min-w-[52px] rounded-full px-2.5 text-[11px] font-semibold transition-colors',
+            'border-0 outline-none focus-visible:outline-none',
+            isDark
+              ? 'bg-[var(--surface-2)] text-[var(--text-primary)] shadow-sm'
+              : 'bg-transparent text-[var(--text-muted)] hover:text-[var(--text-secondary)]',
           )}
         >
           Dark
-        </span>
-      </button>
+        </button>
+      </div>
     </div>
   )
 }

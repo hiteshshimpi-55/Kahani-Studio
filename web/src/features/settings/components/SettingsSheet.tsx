@@ -15,15 +15,15 @@ type Props = {
 }
 
 const BACKDROP_STYLE = {
-  backgroundColor: 'rgba(28, 25, 23, 0.42)',
-  backdropFilter: 'blur(16px) saturate(1.25)',
-  WebkitBackdropFilter: 'blur(16px) saturate(1.25)',
+  backgroundColor: 'rgba(28, 25, 23, 0.28)',
+  backdropFilter: 'blur(6px)',
+  WebkitBackdropFilter: 'blur(6px)',
 } as const
 
 const BACKDROP_STYLE_DARK = {
-  backgroundColor: 'rgba(0, 0, 0, 0.55)',
-  backdropFilter: 'blur(18px) saturate(1.3)',
-  WebkitBackdropFilter: 'blur(18px) saturate(1.3)',
+  backgroundColor: 'rgba(0, 0, 0, 0.4)',
+  backdropFilter: 'blur(6px)',
+  WebkitBackdropFilter: 'blur(6px)',
 } as const
 
 export function SettingsSheet({ open, onClose }: Props) {
