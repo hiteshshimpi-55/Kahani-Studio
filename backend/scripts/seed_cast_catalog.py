@@ -65,7 +65,36 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Upsert Sarvam Bulbul v3 voices (does not wipe ElevenLabs / SFX)",
     )
+    parser.add_argument(
+        "--sfx-upsert",
+        action="store_true",
+        help="Upsert SFX prompt catalog only (does not wipe voices)",
+    )
     args = parser.parse_args(argv)
+
+    # ── SFX-only upsert (drama / ambience prompt pack) ───────────────
+    if args.sfx_upsert:
+        log.info(
+            "seed_sfx_upsert catalog=%s schema=%s index=%s",
+            settings.databricks_catalog,
+            settings.databricks_schema,
+            settings.databricks_cast_index_fqn,
+        )
+        table = ensure_cast_schema_and_table()
+        log.info("table_ready %s", table)
+        rows = curated_sfx_rows()
+        log.info("upserting_sfx count=%s", len(rows))
+        n = upsert_cast_assets(rows)
+        log.info("sfx_upserted %s", n)
+        create_or_get_cast_index()
+        sync_cast_index()
+        if args.skip_index_wait:
+            log.info("skip_index_wait — sync triggered; check dashboard for ONLINE")
+            return 0
+        status = wait_until_online(timeout_sec=1800, poll_sec=20)
+        log.info("index_online status=%s", status.get("status"))
+        log.info("done — SFX catalog upserted into vector DB")
+        return 0
 
     # ── Sarvam-only upsert (preferred path for Hindi voice catalog) ──
     if args.sarvam_only:

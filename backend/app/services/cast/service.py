@@ -25,9 +25,9 @@ CAST_COLUMNS = [
     "tags",
 ]
 
-# Prefer native Indian TTS (Sarvam) over multilingual (ElevenLabs).
-PRIMARY_VOICE_PROVIDER = "sarvam"
-FALLBACK_VOICE_PROVIDER = "elevenlabs"
+# ElevenLabs v3 as primary TTS; Sarvam available as alternative.
+PRIMARY_VOICE_PROVIDER = "elevenlabs"
+FALLBACK_VOICE_PROVIDER = "sarvam"
 
 
 def _parse_sfx_prompt(tags: str | None, description: str | None) -> str | None:
@@ -130,7 +130,7 @@ def _search(
 
 
 def _normalize_voice_provider(value: str | None) -> str:
-    raw = (value or settings.tts_provider or "sarvam").strip().lower()
+    raw = (value or settings.tts_provider or "elevenlabs").strip().lower()
     if raw in ("elevenlabs", "11labs", "eleven", "el"):
         return FALLBACK_VOICE_PROVIDER
     return PRIMARY_VOICE_PROVIDER
@@ -164,7 +164,7 @@ def _search_voices(
     query: str,
     *,
     asset_type: str,
-    voice_provider: str = "sarvam",
+    voice_provider: str = "elevenlabs",
 ) -> list[CastCandidate]:
     """Search cast catalog locked to one voice provider."""
     locked = _normalize_voice_provider(voice_provider)

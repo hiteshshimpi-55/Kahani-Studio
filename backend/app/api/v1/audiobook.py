@@ -20,10 +20,14 @@ class RenderPreviewRequest(BaseModel):
     series_id: str = Field(default="preview", min_length=1, max_length=128)
     max_sec: float = Field(default=120.0, ge=5, le=600)
     with_sfx: bool = True
+    with_bed: bool = Field(
+        default=True,
+        description="Loop a generated ambience bed under the dialogue (ducked)",
+    )
     # Default Sarvam. Pass "elevenlabs" to cast + synthesize only with ElevenLabs.
     voice_provider: str = Field(
-        default="sarvam",
-        description="sarvam | elevenlabs — which voice catalog + TTS engine to use",
+        default="elevenlabs",
+        description="elevenlabs | sarvam — which voice catalog + TTS engine to use",
     )
 
 
@@ -52,6 +56,7 @@ class RenderPreviewResponse(BaseModel):
     sfx_clip_count: int
     voice_map: dict[str, str]
     provider_map: dict[str, str] = Field(default_factory=dict)
+    bed_prompt: str | None = None
     preview_mp3: str | None = None
     stems: list[StemSummary]
     sfx_clips: list[SfxClipSummary]
@@ -62,10 +67,10 @@ async def render_preview(body: RenderPreviewRequest) -> RenderPreviewResponse:
     """Render a short audiobook preview from a ScriptPackage.
 
     ``voice_provider`` locks casting + TTS:
-    - ``sarvam`` (default): native Hindi Bulbul v3 voices
-    - ``elevenlabs``: ElevenLabs library voices + v3 emotion tags
+    - ``elevenlabs`` (default): ElevenLabs library voices + v3 emotion tags
+    - ``sarvam``: native Hindi Sarvam Bulbul v3 voices
 
-    SFX clips still use ElevenLabs sound generation when ``with_sfx=true``.
+    SFX clips and ambience bed always use ElevenLabs sound generation.
     """
     result = await asyncio.to_thread(
         AudiobookService().render_preview,
@@ -73,6 +78,7 @@ async def render_preview(body: RenderPreviewRequest) -> RenderPreviewResponse:
         series_id=body.series_id,
         max_sec=body.max_sec,
         with_sfx=body.with_sfx,
+        with_bed=body.with_bed,
         voice_provider=body.voice_provider,
     )
     return RenderPreviewResponse(
@@ -86,6 +92,7 @@ async def render_preview(body: RenderPreviewRequest) -> RenderPreviewResponse:
         sfx_clip_count=result.get("sfx_clip_count", 0),
         voice_map=result["voice_map"],
         provider_map=result.get("provider_map") or {},
+        bed_prompt=result.get("bed_prompt"),
         preview_mp3=result.get("preview_mp3"),
         stems=[
             StemSummary(

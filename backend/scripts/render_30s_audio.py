@@ -53,11 +53,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--series-id", default="preview", help="Output subfolder name (default: preview)")
     parser.add_argument("--max-sec", type=float, default=30.0, help="Max preview seconds (default: 30)")
     parser.add_argument("--no-sfx", action="store_true", help="Skip SFX generation")
+    parser.add_argument("--no-bed", action="store_true", help="Skip ambience bed under dialogue")
     parser.add_argument(
         "--provider",
         choices=("sarvam", "elevenlabs"),
-        default="sarvam",
-        help="Voice provider for cast + TTS (default: sarvam)",
+        default="elevenlabs",
+        help="Voice provider for cast + TTS (default: elevenlabs)",
     )
     args = parser.parse_args(argv)
 
@@ -86,6 +87,7 @@ def main(argv: list[str] | None = None) -> int:
         max_sec=args.max_sec,
         concat=True,
         with_sfx=not args.no_sfx,
+        with_bed=not args.no_bed,
         voice_provider=args.provider,
     )
 
@@ -113,6 +115,8 @@ def main(argv: list[str] | None = None) -> int:
             {"sfx_id": c["sfx_id"], "cue": c["cue"], "bytes": c["bytes"]}
             for c in result.get("sfx_clips") or []
         ],
+        "bed_prompt": result.get("bed_prompt"),
+        "bed_mp3": result.get("bed_mp3"),
         "preview_mp3": result["preview_mp3"],
     }
     print(json.dumps(summary, indent=2, ensure_ascii=False))
