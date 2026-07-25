@@ -1,79 +1,35 @@
-import { useEffect, useState } from 'react'
+import { useSystemHealth } from '@/features/system/hooks/use-system-health'
+import { cn } from '@/lib/utils'
 
-type Health = {
-  status: string
-  service: string
-  postgres: { ok: boolean; error: string | null }
-  redis: { ok: boolean; error: string | null }
-  data_dir: string
-}
-
-export default function App() {
-  const [health, setHealth] = useState<Health | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [jobId, setJobId] = useState<string | null>(null)
-  const [busy, setBusy] = useState(false)
-
-  async function loadHealth() {
-    setError(null)
-    try {
-      const res = await fetch('/api/health')
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      setHealth(await res.json())
-    } catch (e) {
-      setHealth(null)
-      setError(e instanceof Error ? e.message : 'Failed to reach API')
-    }
-  }
-
-  async function enqueuePing() {
-    setBusy(true)
-    setError(null)
-    try {
-      const res = await fetch('/api/jobs/ping', { method: 'POST' })
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const data = await res.json()
-      setJobId(data.job_id ?? null)
-      await loadHealth()
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to enqueue job')
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  useEffect(() => {
-    void loadHealth()
-  }, [])
+export function SystemStatusView() {
+  const { health, error, jobId, busy, loadHealth, enqueuePing } = useSystemHealth()
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-8 px-6 py-16">
+    <div className="mx-auto flex max-w-2xl flex-col gap-8 px-6 py-12">
       <header className="flex flex-col gap-2">
-        <p className="text-sm tracking-[0.2em] text-stone-500 uppercase">Kissa</p>
-        <h1 className="text-4xl font-semibold tracking-tight text-stone-900">
-          Base stack
-        </h1>
+        <h1 className="text-3xl font-semibold tracking-tight">Base stack</h1>
         <p className="text-stone-600">
-          Vite frontend, FastAPI API, Redis queue, Postgres, and ARQ worker —
-          no product features yet.
+          Vite frontend, FastAPI API, Redis queue, Postgres, and ARQ worker — no
+          product features yet.
         </p>
       </header>
 
       <section className="rounded-lg border border-stone-300 bg-[#faf7f0] p-5">
         <div className="mb-4 flex items-center justify-between gap-3">
-          <h2 className="text-lg font-medium text-stone-900">System health</h2>
+          <h2 className="text-lg font-medium">System health</h2>
           <button
             type="button"
             onClick={() => void loadHealth()}
-            className="rounded border border-stone-400 px-3 py-1.5 text-sm text-stone-800 hover:bg-stone-200"
+            className={cn(
+              'rounded border border-stone-400 px-3 py-1.5 text-sm text-stone-800',
+              'hover:bg-stone-200',
+            )}
           >
             Refresh
           </button>
         </div>
 
-        {error ? (
-          <p className="text-sm text-red-700">{error}</p>
-        ) : null}
+        {error ? <p className="text-sm text-red-700">{error}</p> : null}
 
         {health ? (
           <dl className="grid grid-cols-2 gap-3 text-sm">
@@ -104,7 +60,7 @@ export default function App() {
       </section>
 
       <section className="rounded-lg border border-stone-300 bg-[#faf7f0] p-5">
-        <h2 className="mb-3 text-lg font-medium text-stone-900">Worker queue</h2>
+        <h2 className="mb-3 text-lg font-medium">Worker queue</h2>
         <p className="mb-4 text-sm text-stone-600">
           Enqueues a smoke-test job. The worker writes to{' '}
           <code className="rounded bg-stone-200 px-1">/data/worker_ping.txt</code>.
@@ -121,6 +77,6 @@ export default function App() {
           <p className="mt-3 font-mono text-xs text-stone-600">job_id: {jobId}</p>
         ) : null}
       </section>
-    </main>
+    </div>
   )
 }

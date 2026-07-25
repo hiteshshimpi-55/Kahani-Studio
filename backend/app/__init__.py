@@ -1,1 +1,1 @@
-# Kissa backend application package
+"""Kissa backend application package."""
