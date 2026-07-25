@@ -18,6 +18,7 @@ voice switch.
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 import shutil
@@ -1081,10 +1082,9 @@ class AudiobookService:
                 [c.id for c in cast_script.characters],
                 len(cast_map),
             )
-        except Exception as exc:
-            log.warning(
-                "cast_search_unavailable (%s) — using local %s voice pool",
-                exc,
+        except Exception:
+            log.exception(
+                "cast_search_failed provider=%s — falling back to local pool",
                 locked_provider,
             )
 
@@ -1333,6 +1333,44 @@ class AudiobookService:
                 prev_direction = line.direction
                 prev_was_sfx = False
 
+        # ── 2b. Timeline map — where each stem/SFX lands in the final
+        # mix (seconds).  Used by the visual director to sync shots.
+        timeline_events: list[dict[str, Any]] = []
+        if has_ffmpeg and timeline_segments:
+            path_to_stem = {s["path"]: s for s in stems}
+            path_to_sfx = {c["path"]: c for c in sfx_clips}
+            dur_cache: dict[str, float] = {}
+            cursor = 0.0
+            for seg in timeline_segments:
+                if seg not in dur_cache:
+                    try:
+                        dur_cache[seg] = _probe_duration(seg)
+                    except Exception:
+                        dur_cache[seg] = 0.0
+                seg_dur = dur_cache[seg]
+                if seg in path_to_stem:
+                    s = path_to_stem[seg]
+                    timeline_events.append({
+                        "type": "line",
+                        "seq_id": s["seq_id"],
+                        "speaker": s["speaker"],
+                        "t_start": round(cursor, 3),
+                        "t_end": round(cursor + seg_dur, 3),
+                    })
+                elif seg in path_to_sfx:
+                    c = path_to_sfx[seg]
+                    timeline_events.append({
+                        "type": "sfx",
+                        "seq_id": c["sfx_id"],
+                        "cue": c["cue"],
+                        "t_start": round(cursor, 3),
+                        "t_end": round(cursor + seg_dur, 3),
+                    })
+                cursor += seg_dur
+            total_duration = round(cursor, 3)
+        else:
+            total_duration = 0.0
+
         # ── 3. Assemble final timeline (two-bus production mix) ─────
         # dialogue bus (stems + gaps + spot SFX) → loudness anchor →
         # ambience bed looped underneath with sidechain ducking →
@@ -1384,7 +1422,7 @@ class AudiobookService:
             else:
                 Path(preview_path).write_bytes(Path(raw_path).read_bytes())
 
-        return {
+        result = {
             "series_id": series_id,
             "title": package.get("title"),
             "language": language,
@@ -1399,7 +1437,38 @@ class AudiobookService:
             "provider_map": provider_map,
             "stems": stems,
             "sfx_clips": sfx_clips,
+            "timeline": timeline_events,
+            "duration_sec": total_duration,
             "bed_prompt": bed_prompt,
             "bed_mp3": bed_path,
             "preview_mp3": preview_path if stems else None,
         }
+        # Persist for the visual pipeline (POST /visuals/render reuses this).
+        try:
+            (out_dir / "audio_result.json").write_text(
+                json.dumps(result, indent=2, ensure_ascii=False)
+            )
+        except Exception:
+            log.exception("audio_result_persist_failed series=%s", series_id)
+
+        # Canonical copy on S3 + Postgres map (local files kept).
+        try:
+            from app.services.visuals import artifacts as media
+
+            uploaded = media.publish_tree(out_dir, series_id=series_id, kind=media.KIND_TTS)
+            preview_name = Path(preview_path).name if stems else None
+            result["preview_url"] = (
+                media.url_for(series_id, media.KIND_TTS, preview_name)
+                if preview_name
+                else None
+            )
+            result["assets_uploaded"] = len(uploaded)
+            log.info(
+                "audiobook_s3_publish series=%s files=%d preview_url=%s",
+                series_id, len(uploaded), bool(result.get("preview_url")),
+            )
+        except Exception:
+            log.exception("audiobook_s3_publish_failed series=%s", series_id)
+            result.setdefault("preview_url", None)
+
+        return result
