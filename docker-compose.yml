@@ -14,6 +14,8 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+    networks:
+      - kissa_net
 
   redis:
     image: redis:7-alpine
@@ -24,6 +26,8 @@ services:
       retries: 10
     ports:
       - "6379:6379"
+    networks:
+      - kissa_net
 
   api:
     build:
@@ -51,6 +55,8 @@ services:
       timeout: 3s
       retries: 10
       start_period: 15s
+    networks:
+      - kissa_net
 
   worker:
     build:
@@ -72,6 +78,8 @@ services:
         condition: service_healthy
       api:
         condition: service_healthy
+    networks:
+      - kissa_net
 
   web:
     build:
@@ -82,6 +90,12 @@ services:
         condition: service_healthy
     ports:
       - "5173:80"
+    networks:
+      - kissa_net
+
+networks:
+  kissa_net:
+    driver: bridge
 
 volumes:
   kissa_data:

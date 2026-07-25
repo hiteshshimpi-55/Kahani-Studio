@@ -44,6 +44,7 @@ export interface SimRun {
   id: string
   episode_id: string
   series_id: string
+  project_id: string | null
   status: 'PENDING' | 'RUNNING' | 'COMPLETED' | 'FAILED'
   calibration_status: string
   persona_count: number | null

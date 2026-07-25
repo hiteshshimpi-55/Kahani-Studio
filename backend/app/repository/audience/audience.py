@@ -14,9 +14,15 @@ async def create_sim_run(
     *,
     episode_id: str,
     series_id: str,
+    project_id: str | None = None,
 ) -> SimRun:
     """Create a new PENDING sim run."""
-    row = SimRun(episode_id=episode_id, series_id=series_id, status=SimRunStatus.PENDING)
+    row = SimRun(
+        episode_id=episode_id,
+        series_id=series_id,
+        project_id=project_id,
+        status=SimRunStatus.PENDING,
+    )
     session.add(row)
     await session.flush()
     await session.refresh(row)
@@ -43,6 +49,21 @@ async def get_sim_runs_for_episode(session: AsyncSession, episode_id: str) -> li
     )
     result = await session.execute(stmt)
     return list(result.scalars().all())
+
+
+async def get_latest_sim_run_for_project(
+    session: AsyncSession, project_id: str
+) -> SimRun | None:
+    """Return the most-recent sim run for a project (with patches loaded)."""
+    stmt = (
+        select(SimRun)
+        .where(SimRun.project_id == project_id)
+        .order_by(SimRun.created_at.desc())
+        .options(selectinload(SimRun.patches))
+        .limit(1)
+    )
+    result = await session.execute(stmt)
+    return result.scalar_one_or_none()
 
 
 async def update_patch_status(

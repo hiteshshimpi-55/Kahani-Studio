@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 
+import { StoryResearchPanel } from '@/features/projects/components/StoryResearchPanel'
+import { WhyThisWorksPanel } from '@/features/projects/components/WhyThisWorksPanel'
+
 export function ScriptResultCard({
   projectId,
   scriptId,
@@ -130,6 +133,17 @@ export function ScriptResultCard({
         <pre className="max-h-[280px] overflow-y-auto px-4 py-4 font-sans text-[13px] leading-6 whitespace-pre-wrap text-[var(--text-primary)]">
           {preview}
         </pre>
+      )}
+
+      {runId && !editing && (
+        <>
+          <WhyThisWorksPanel
+            projectId={projectId}
+            runId={runId}
+            screenplayMd={draftText}
+          />
+          <StoryResearchPanel projectId={projectId} runId={runId} />
+        </>
       )}
     </article>
   )

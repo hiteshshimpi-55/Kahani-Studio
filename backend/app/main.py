@@ -27,10 +27,13 @@ async def _ensure_schema() -> None:
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
         await conn.execute(
-            text(
-                "ALTER TABLE project_runs "
-                "ADD COLUMN IF NOT EXISTS session_id VARCHAR(36)"
-            )
+            text("ALTER TABLE project_runs ADD COLUMN IF NOT EXISTS session_id VARCHAR(36)")
+        )
+        await conn.execute(
+            text("ALTER TABLE sim_runs ADD COLUMN IF NOT EXISTS project_id VARCHAR(36)")
+        )
+        await conn.execute(
+            text("CREATE INDEX IF NOT EXISTS ix_sim_runs_project_id ON sim_runs (project_id)")
         )
 
 

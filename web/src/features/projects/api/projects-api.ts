@@ -5,10 +5,13 @@ import type {
   CreateProjectInput,
   Project,
   ProjectAttachment,
+  ProjectAudienceSimRequest,
   ProjectRun,
   ScriptLatest,
   ScriptSummary,
   StartRunInput,
+  StoryAnalysis,
+  StoryResearch,
 } from '../types'
 
 export async function listProjects(): Promise<Project[]> {
@@ -198,5 +201,59 @@ export async function updateScript(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ screenplay_md }),
   })
+  return parseJson(res)
+}
+
+export async function triggerProjectAudienceSim(
+  projectId: string,
+  req: ProjectAudienceSimRequest,
+): Promise<{ sim_run_id: string; queued: boolean }> {
+  const res = await fetch(apiUrl(`/api/v1/projects/${projectId}/audience-sim`), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(req),
+  })
+  return parseJson(res)
+}
+
+export async function getProjectAudienceSimLatest(projectId: string): Promise<unknown> {
+  const res = await fetch(apiUrl(`/api/v1/projects/${projectId}/audience-sim/latest`))
+  if (res.status === 204 || res.status === 404) return null
+  return parseJson(res)
+}
+
+export async function triggerRunResearch(
+  projectId: string,
+  runId: string,
+): Promise<StoryResearch> {
+  const res = await fetch(
+    apiUrl(`/api/v1/projects/${projectId}/runs/${runId}/research`),
+    { method: 'POST' },
+  )
+  return parseJson(res)
+}
+
+export async function getRunResearch(
+  projectId: string,
+  runId: string,
+): Promise<StoryResearch | null> {
+  const res = await fetch(apiUrl(`/api/v1/projects/${projectId}/runs/${runId}/research`))
+  if (res.status === 404) return null
+  return parseJson(res)
+}
+
+export async function analyzeStory(
+  projectId: string,
+  runId: string,
+  screenplayMd: string,
+): Promise<StoryAnalysis> {
+  const res = await fetch(
+    apiUrl(`/api/v1/projects/${projectId}/runs/${runId}/story-analysis`),
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ screenplay_md: screenplayMd }),
+    },
+  )
   return parseJson(res)
 }
