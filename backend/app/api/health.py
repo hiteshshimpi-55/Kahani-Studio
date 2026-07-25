@@ -4,10 +4,17 @@ from fastapi import APIRouter, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies.db import get_db
+from app.core.config import settings
 from app.services.health.service import HealthService
 
 router = APIRouter(tags=["health"])
 _health = HealthService()
+
+
+@router.get("/health/live")
+async def health_live():
+    """Process liveness — no DB/Redis. Used by Docker healthchecks."""
+    return {"status": "ok", "service": settings.app_name}
 
 
 @router.get("/health")

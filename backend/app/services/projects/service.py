@@ -2,19 +2,21 @@ from __future__ import annotations
 
 import json
 import logging
+from datetime import datetime, timezone
 from pathlib import Path
 
 from arq.connections import ArqRedis
 from fastapi import UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.agents.chat_memory import append_turn, load_checkpoint_messages, messages_to_history_pairs
+from app.agents.graph.checkpointer import get_checkpointer
 from app.core.config import settings
 from app.errors import AppError
-from app.repository.models.project import ChatSession, ChatTurn, ProjectAttachment, ProjectRun, Script
+from app.repository.models.project import ChatSession, ProjectAttachment, ProjectRun, Script
 from app.repository.projects import (
     AttachmentRepository,
     ChatSessionRepository,
-    ChatTurnRepository,
     ProjectRepository,
     RunRepository,
     ScriptRepository,
@@ -37,6 +39,7 @@ from app.schemas.projects.response import (
     ScriptLatestResponse,
     ScriptSummaryResponse,
 )
+from app.services.chat.checkpoint_history import build_session_chat_history
 from app.services.chat.orchestrator import analyze_user_message
 from app.services.projects.storage import (
     attachment_storage_path,
@@ -66,7 +69,6 @@ class ProjectsService:
         self._projects = ProjectRepository(session)
         self._attachments = AttachmentRepository(session)
         self._sessions = ChatSessionRepository(session)
-        self._turns = ChatTurnRepository(session)
         self._runs = RunRepository(session)
         self._scripts = ScriptRepository(session)
 
@@ -230,6 +232,11 @@ class ProjectsService:
             total_duration_sec=body.total_duration_sec or 600,
         )
         run = await self._runs.create(run)
+        # LangGraph thread id = run id (checkpoints keyed per generation run)
+        await self._runs.update_status(
+            run.id, status=run.status, langgraph_thread_id=run.id
+        )
+        run.langgraph_thread_id = run.id
 
         if self._redis is None:
             raise AppError(
@@ -350,7 +357,7 @@ class ProjectsService:
     async def post_chat_message(
         self, project_id: str, body: ChatMessageRequest
     ) -> ChatMessageResponse:
-        """Clarify-first chat: analyze → NL/clarify, or start generation when ready."""
+        """Clarify-first chat; messages persist in LangGraph checkpointer (session thread)."""
         await self._require_project(project_id)
         if body.session_id:
             session = await self._sessions.get(body.session_id)
@@ -360,18 +367,10 @@ class ProjectsService:
             session = await self._ensure_default_session(project_id)
 
         message = body.message.strip()
-        await self._turns.create(
-            ChatTurn(
-                project_id=project_id,
-                session_id=session.id,
-                role="user",
-                content=message,
-                kind="user",
-            )
-        )
+        checkpointer = get_checkpointer()
+        prior = await load_checkpoint_messages(checkpointer, session.id)
+        history = messages_to_history_pairs(prior)
 
-        history_rows = await self._turns.list_for_session(session.id)
-        history = [{"role": t.role, "content": t.content} for t in history_rows[:-1]]
         attachments = await self._attachments.list_for_project(project_id)
         analysis = await analyze_user_message(
             user_message=message,
@@ -381,6 +380,7 @@ class ProjectsService:
 
         questions = analysis.get("questions") or []
         reply = str(analysis.get("reply") or "").strip()
+        now = datetime.now(timezone.utc)
 
         # Natural language or clarifying questions — do not start generation
         if analysis.get("intent") != "generate" or not analysis.get("enough_context"):
@@ -390,22 +390,21 @@ class ProjectsService:
                 content = f"{reply}\n\n{q_block}".strip() if reply else q_block
             else:
                 content = reply
-            turn = await self._turns.create(
-                ChatTurn(
-                    project_id=project_id,
-                    session_id=session.id,
-                    role="assistant",
-                    content=content,
-                    kind=kind,
-                    meta={"questions": questions, "analysis": analysis},
-                )
+            _, assistant_id = await append_turn(
+                checkpointer,
+                session_id=session.id,
+                user_text=message,
+                assistant_text=content,
+                kind=kind,
+                questions=list(questions),
+                analysis=analysis,
             )
             return ChatMessageResponse(
-                id=turn.id,
+                id=assistant_id,
                 role="assistant",
                 content=content,
                 kind=kind,
-                created_at=turn.created_at,
+                created_at=now,
                 questions=list(questions),
                 session_id=session.id,
             )
@@ -423,23 +422,22 @@ class ProjectsService:
             "Starting discovery and the Script Writer now. You can stop anytime. "
             "When it finishes, review the script and save it as a draft if you like it."
         )
-        turn = await self._turns.create(
-            ChatTurn(
-                project_id=project_id,
-                session_id=session.id,
-                role="assistant",
-                content=content,
-                kind="generating",
-                run_id=run.id,
-                meta={"questions": [], "analysis": analysis},
-            )
+        _, assistant_id = await append_turn(
+            checkpointer,
+            session_id=session.id,
+            user_text=message,
+            assistant_text=content,
+            kind="generating",
+            run_id=run.id,
+            questions=[],
+            analysis=analysis,
         )
         return ChatMessageResponse(
-            id=turn.id,
+            id=assistant_id,
             role="assistant",
             content=content,
             kind="generating",
-            created_at=turn.created_at,
+            created_at=now,
             run_id=run.id,
             session_id=session.id,
             run=run,
@@ -456,37 +454,31 @@ class ProjectsService:
         else:
             session = await self._ensure_default_session(project_id)
 
-        turns = await self._turns.list_for_session(session.id)
+        raw = await build_session_chat_history(get_checkpointer(), session.id)
         items: list[ChatHistoryItem] = []
-        for turn in turns:
+        for row in raw:
             preview = None
             draft_id = None
             is_draft = False
             run_status = None
-            if turn.run_id:
-                run = await self._runs.get(turn.run_id)
+            run_id = row.get("run_id")
+            if run_id:
+                run = await self._runs.get(str(run_id))
                 if run:
                     run_status = run.status
                     rr = await self._run_response(run)
                     preview = rr.screenplay_md or rr.screenplay_preview
                     draft_id = rr.draft_script_id
                     is_draft = rr.is_draft
-                    if run.status == "succeeded" and turn.kind == "generating":
-                        # Prefer richer script messaging on hydrate
-                        pass
-            meta = turn.meta or {}
-            questions = meta.get("questions") if isinstance(meta, dict) else []
-            if not isinstance(questions, list):
-                questions = []
             items.append(
                 ChatHistoryItem(
-                    id=turn.id,
-                    role=turn.role,
-                    content=turn.content,
-                    kind=turn.kind,
-                    created_at=turn.created_at,
-                    run_id=turn.run_id,
-                    questions=[str(q) for q in questions],
+                    id=str(row["id"]),
+                    role=str(row["role"]),
+                    content=str(row["content"]),
+                    kind=str(row["kind"]),
+                    created_at=row["created_at"],
+                    run_id=str(run_id) if run_id else None,
+                    questions=list(row.get("questions") or []),
                     script_preview=preview,
                     draft_script_id=draft_id,
                     is_draft=is_draft,

@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, File, Query, Request, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
+from sse_starlette.sse import EventSourceResponse
 
 from app.api.dependencies.db import get_db
 from app.schemas.projects.request import (
@@ -21,6 +22,7 @@ from app.schemas.projects.response import (
     ScriptSummaryResponse,
 )
 from app.services.projects import ProjectsService
+from app.services.chat.stream_service import ChatStreamService
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 
@@ -121,6 +123,27 @@ async def post_chat_message(
     db: AsyncSession = Depends(get_db),
 ) -> ChatMessageResponse:
     return await _service(request, db).post_chat_message(project_id, body)
+
+
+@router.post("/{project_id}/chat/messages/stream")
+async def stream_chat_message(
+    project_id: str,
+    body: ChatMessageRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """SSE stream: status phases + typewriter text + optional run_started."""
+
+    async def _events():
+        svc = ChatStreamService(db, redis=getattr(request.app.state, "redis", None))
+        async for evt in svc.stream_message(project_id, body):
+            yield evt
+
+    return EventSourceResponse(
+        _events(),
+        ping=15,
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @router.get("/{project_id}/chat/messages", response_model=list[ChatHistoryItem])

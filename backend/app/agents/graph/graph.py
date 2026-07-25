@@ -1,4 +1,4 @@
-"""Cancellable project graph runner (node-by-node)."""
+"""Cancellable project graph runner with shared Postgres checkpointer."""
 
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ import logging
 from collections.abc import Awaitable, Callable
 from typing import Any
 
+from app.agents.graph.checkpointer import ensure_checkpoint_tables, get_checkpointer
 from app.agents.graph.nodes_context import build_source, retrieve_context
 from app.agents.graph.state import ProjectGraphState
 from app.agents.script_writer.agent import ScriptWriterAgent, default_narration_config
@@ -36,7 +37,7 @@ def _noop_persist(state: ProjectGraphState) -> dict[str, Any]:
     return {}
 
 
-def build_project_graph():
+def build_project_graph(*, checkpointer: Any | None = None):
     try:
         from langgraph.graph import END, StateGraph
     except ImportError as exc:
@@ -53,12 +54,15 @@ def build_project_graph():
     graph.add_edge("build_source", "script_writer")
     graph.add_edge("script_writer", "persist_artifacts")
     graph.add_edge("persist_artifacts", END)
-    return graph.compile()
+    return graph.compile(checkpointer=checkpointer)
 
 
-async def run_project_graph(initial: ProjectGraphState) -> ProjectGraphState:
-    graph = build_project_graph()
-    result = await graph.ainvoke(initial)
+async def run_project_graph(initial: ProjectGraphState, *, thread_id: str) -> ProjectGraphState:
+    await ensure_checkpoint_tables()
+    checkpointer = get_checkpointer()
+    graph = build_project_graph(checkpointer=checkpointer)
+    config = {"configurable": {"thread_id": thread_id}}
+    result = await graph.ainvoke(initial, config)
     return result  # type: ignore[return-value]
 
 
@@ -66,8 +70,39 @@ async def run_project_graph_cancellable(
     initial: ProjectGraphState,
     *,
     is_cancelled: CancelCheck,
+    thread_id: str,
 ) -> ProjectGraphState:
-    """Run discovery → source.md → script writer with cancel checks between nodes."""
+    """Run discovery → source → script writer; checkpoint after each node."""
+    await ensure_checkpoint_tables()
+    if await is_cancelled():
+        raise RunCancelled()
+
+    checkpointer = get_checkpointer()
+    graph = build_project_graph(checkpointer=checkpointer)
+    config: dict[str, Any] = {"configurable": {"thread_id": f"run:{thread_id}"}}
+
+    try:
+        async for _ in graph.astream(initial, config, stream_mode="updates"):
+            if await is_cancelled():
+                raise RunCancelled()
+        snap = await graph.aget_state(config)
+        values = snap.values if snap else {}
+        if isinstance(values, dict) and values:
+            return values  # type: ignore[return-value]
+        result = await graph.ainvoke(None, config)
+        return result  # type: ignore[return-value]
+    except RunCancelled:
+        raise
+    except Exception:
+        logger.exception("langgraph_stream_failed — falling back to node loop")
+        return await _fallback_node_loop(initial, is_cancelled=is_cancelled)
+
+
+async def _fallback_node_loop(
+    initial: ProjectGraphState,
+    *,
+    is_cancelled: CancelCheck,
+) -> ProjectGraphState:
     state: dict[str, Any] = dict(initial)
     steps: list[Callable[..., Any]] = [
         retrieve_context,

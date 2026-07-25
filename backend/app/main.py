@@ -43,8 +43,22 @@ async def lifespan(app: FastAPI):
             "database_startup_failed — API will start; /api/health will show postgres down. "
             "Check DATABASE_URL (user:password@host) in .env"
         )
+    try:
+        from app.agents.graph.checkpointer import init_checkpointer
+
+        await init_checkpointer()
+    except Exception:
+        log.exception(
+            "langgraph_checkpoint_setup_failed — chat history / runs need Postgres checkpointer"
+        )
     app.state.redis = await create_redis_pool()
     yield
+    try:
+        from app.agents.graph.checkpointer import shutdown_checkpointer
+
+        await shutdown_checkpointer()
+    except Exception:
+        log.exception("checkpointer_shutdown_failed")
     await close_redis_pool(app.state.redis)
     await engine.dispose()
 

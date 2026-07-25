@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom'
 
 import { KissaLoader } from '@/components/ui/kissa-loader'
 import { useProject } from '@/features/projects/hooks/use-project'
+import { NotFoundView } from '@/features/system/pages/NotFoundPage'
 
 import { ChatComposer } from '../components/ChatComposer'
 import { ChatEmptyState } from '../components/ChatEmptyState'
@@ -25,7 +26,7 @@ export function ProjectChatPage() {
     attach,
     saveDraft,
     updateDraft,
-    resetSession,
+    addSession,
     selectSession,
   } = useAgentChat(projectId)
   const [uploading, setUploading] = useState(false)
@@ -41,9 +42,10 @@ export function ProjectChatPage() {
 
   if (error || !project || !projectId) {
     return (
-      <div className="flex h-full items-center justify-center text-[13px] text-destructive">
-        {error || 'Project not found'}
-      </div>
+      <NotFoundView
+        kind="project"
+        detail={error && error !== 'Project not found' ? error : null}
+      />
     )
   }
 
@@ -54,10 +56,10 @@ export function ProjectChatPage() {
           <button
             type="button"
             disabled={streaming}
-            onClick={() => void resetSession()}
+            onClick={() => void addSession()}
             className="rounded-[6px] px-2.5 py-1 text-[11px] font-medium text-[var(--text-secondary)] hover:bg-[var(--surface-1)] hover:text-[var(--text-primary)] disabled:opacity-40"
           >
-            Reset session
+            Add session
           </button>
         </div>
         {empty ? (
@@ -108,7 +110,7 @@ export function ProjectChatPage() {
         activeSessionId={activeSessionId}
         streaming={streaming}
         onSelect={(id) => void selectSession(id)}
-        onReset={() => void resetSession()}
+        onAdd={() => void addSession()}
       />
     </div>
   )

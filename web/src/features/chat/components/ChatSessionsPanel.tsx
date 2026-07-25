@@ -1,4 +1,4 @@
-import { RotateCcw } from 'lucide-react'
+import { Plus } from 'lucide-react'
 
 import type { ChatSession } from '@/features/projects/types'
 import { cn } from '@/lib/utils'
@@ -8,7 +8,7 @@ type Props = {
   activeSessionId: string | null
   streaming?: boolean
   onSelect: (sessionId: string) => void
-  onReset: () => void
+  onAdd: () => void
 }
 
 export function ChatSessionsPanel({
@@ -16,7 +16,7 @@ export function ChatSessionsPanel({
   activeSessionId,
   streaming,
   onSelect,
-  onReset,
+  onAdd,
 }: Props) {
   return (
     <aside className="hidden h-full w-[220px] shrink-0 flex-col border-l border-[var(--folio-border)] bg-[var(--surface-2)] lg:flex">
@@ -27,12 +27,12 @@ export function ChatSessionsPanel({
         <button
           type="button"
           disabled={streaming}
-          onClick={onReset}
-          title="Reset session"
+          onClick={onAdd}
+          title="Add session"
           className="inline-flex items-center gap-1 rounded-[6px] px-2 py-1 text-[11px] font-medium text-[var(--text-secondary)] transition-colors hover:bg-[var(--surface-1)] hover:text-[var(--text-primary)] disabled:opacity-40"
         >
-          <RotateCcw className="h-3 w-3" />
-          Reset
+          <Plus className="h-3 w-3" />
+          Add
         </button>
       </div>
       <div className="min-h-0 flex-1 space-y-0.5 overflow-y-auto p-2">

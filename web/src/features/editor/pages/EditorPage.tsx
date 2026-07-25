@@ -13,6 +13,7 @@ import {
 } from '@/features/editor/timeline'
 import { getScript, listProjects, listScripts } from '@/features/projects/api/projects-api'
 import type { Project, ScriptLatest, ScriptSummary } from '@/features/projects/types'
+import { NotFoundView } from '@/features/system/pages/NotFoundPage'
 
 type RecentDraft = ScriptSummary & { project_name: string }
 
@@ -93,7 +94,16 @@ export function EditorPage() {
   }
 
   if (error) {
-    return <p className="text-[13px] text-destructive">{error}</p>
+    return (
+      <NotFoundView
+        kind={projectId && draftId ? 'draft' : 'resource'}
+        detail={error}
+      />
+    )
+  }
+
+  if (projectId && draftId && !script && !loading) {
+    return <NotFoundView kind="draft" />
   }
 
   if (script && projectId && draftId && timeline) {

@@ -9,9 +9,10 @@ Audio-first storytelling production monorepo (base infrastructure only).
 | `web` | Vite + React SPA (nginx) |
 | `api` | FastAPI |
 | `worker` | ARQ generation worker |
+| `postgres` | Postgres 16 (local Compose) |
 | `redis` | Redis 7 (job queue) |
 
-Postgres is external via `DATABASE_URL` in `.env` (e.g. Databricks). No local Postgres container.
+Postgres runs in Compose (`kissa` / `kissa` @ `localhost:5432`). Override with a remote `DATABASE_URL` in `.env` if needed.
 
 ## Frontend → backend
 
@@ -48,6 +49,15 @@ docker compose down
 ```
 
 ## Layout
+
+| Path | Role |
+|------|------|
+| `web/` | Vite React SPA (deploy to Vercel) |
+| `backend/` | FastAPI + ARQ worker (same image) |
+| `terraform/` | AWS: RDS, Redis, S3, ALB, ECS api+worker |
+| `.github/workflows/` | CI/CD for backend (ECR/ECS) and frontend (Vercel) |
+
+See [terraform/README.md](terraform/README.md) for Cloudflare `api.uselamp.app` DNS and apply steps.
 
 ```
 web/        Vite React (TCC-style feature modules)

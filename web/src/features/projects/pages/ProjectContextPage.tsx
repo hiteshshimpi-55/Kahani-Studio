@@ -4,6 +4,7 @@ import { KissaLoader } from '@/components/ui/kissa-loader'
 import { ContextAttachmentsPanel } from '@/features/projects/components/ContextAttachmentsPanel'
 import { useAttachments } from '@/features/projects/hooks/use-attachments'
 import { useProject } from '@/features/projects/hooks/use-project'
+import { NotFoundView } from '@/features/system/pages/NotFoundPage'
 
 export function ProjectContextPage() {
   const { projectId } = useParams<{ projectId: string }>()
@@ -18,7 +19,12 @@ export function ProjectContextPage() {
     )
   }
   if (error || !project) {
-    return <p className="text-[13px] text-destructive">{error || 'Not found'}</p>
+    return (
+      <NotFoundView
+        kind="project"
+        detail={error && error !== 'Not found' && error !== 'Project not found' ? error : null}
+      />
+    )
   }
 
   return (

@@ -42,7 +42,7 @@ export async function listSessions(projectId: string): Promise<ChatSession[]> {
   return parseJson(res)
 }
 
-export async function resetSession(projectId: string): Promise<ChatSession> {
+export async function createSession(projectId: string): Promise<ChatSession> {
   const res = await fetch(apiUrl(`/api/v1/projects/${projectId}/sessions`), {
     method: 'POST',
   })

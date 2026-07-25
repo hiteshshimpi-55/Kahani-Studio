@@ -86,8 +86,17 @@ async def project_run_job(ctx: dict, project_id: str, run_id: str) -> dict:
                     return bool(row and row.status == "cancelled")
 
             try:
+                thread_id = run.langgraph_thread_id or run_id
+                if not run.langgraph_thread_id:
+                    await runs.update_status(
+                        run_id, status=run.status, langgraph_thread_id=thread_id
+                    )
+                    await session.commit()
+
                 result = await run_project_graph_cancellable(
-                    initial, is_cancelled=_cancelled
+                    initial,
+                    is_cancelled=_cancelled,
+                    thread_id=thread_id,
                 )
             except RunCancelled:
                 await session.rollback()

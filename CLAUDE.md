@@ -74,7 +74,7 @@ After the first `make run`, **edit FE/BE source and refresh** — no rebuild nee
 Env (root `.env`):
 
 - `VITE_API_BASE_URL` — browser-facing API origin (used by **prod** web build; empty in `make run` — Vite proxies `/api`)
-- `DATABASE_URL` — external Postgres (`postgresql+asyncpg://…?ssl=require`); no local Postgres container
+- `DATABASE_URL` — local Compose default `postgresql+asyncpg://kissa:kissa@postgres:5432/kissa` (override for remote)
 - `REDIS_URL`, `DATA_DIR`
 - `DATABRICKS_HOST`, `DATABRICKS_TOKEN`, `DATABRICKS_AI_SEARCH_ENDPOINT`, `DATABRICKS_AI_SEARCH_INDEX` — AI Search Direct Access (optional; local chunk fallback if unset)
 - `LLM_PROVIDER` (`openai` | `anthropic`), `LLM_API_KEY`, `LLM_MODEL` — Script Writer (stub if key unset; default provider `openai` / `gpt-4o`)

@@ -18,6 +18,7 @@ Given the user's latest message and recent conversation, decide what to do next.
 Return ONLY valid JSON with this shape:
 {
   "intent": "chat" | "generate",
+  "action": "chat" | "clarify" | "generate" | "rewrite",
   "needs_clarification": boolean,
   "questions": ["..."],
   "reply": "natural language reply to the user",
@@ -27,8 +28,10 @@ Return ONLY valid JSON with this shape:
 }
 
 Rules:
-- intent=chat when the user is greeting, asking about the product, or not asking to create audio/script content.
-- intent=generate when they want a story, episode, serial, screenplay, audio drama, etc.
+- action=chat for greetings/product questions.
+- action=clarify when intent=generate but details missing.
+- action=generate when ready to write a new script.
+- action=rewrite when user wants to revise/redo an existing script or draft.
 - If intent=generate but key details are missing (genre, language, tone, length/parts, premise), set needs_clarification=true and ask 1-3 short questions in "questions". Put a friendly intro in "reply".
 - enough_context=true only when you can start discovery + script writing without more answers.
 - Never invent that generation already started. You only analyze and ask or confirm readiness.
@@ -76,6 +79,7 @@ def _stub_analysis(user_message: str, attachment_count: int) -> dict[str, Any]:
     if not wants:
         return {
             "intent": "chat",
+            "action": "chat",
             "needs_clarification": False,
             "questions": [],
             "reply": (
@@ -103,6 +107,7 @@ def _stub_analysis(user_message: str, attachment_count: int) -> dict[str, Any]:
     if missing:
         return {
             "intent": "generate",
+            "action": "clarify",
             "needs_clarification": True,
             "questions": missing[:3],
             "reply": (
@@ -115,6 +120,7 @@ def _stub_analysis(user_message: str, attachment_count: int) -> dict[str, Any]:
 
     return {
         "intent": "generate",
+        "action": "generate",
         "needs_clarification": False,
         "questions": [],
         "reply": (
@@ -197,6 +203,9 @@ async def analyze_user_message(
 
     return {
         "intent": intent,
+        "action": data.get("action") if data.get("action") in ("chat", "clarify", "generate", "rewrite") else (
+            "clarify" if needs else ("generate" if intent == "generate" and enough else "chat")
+        ),
         "needs_clarification": needs,
         "questions": questions,
         "reply": reply,
