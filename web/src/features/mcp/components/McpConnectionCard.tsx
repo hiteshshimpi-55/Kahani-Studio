@@ -1,4 +1,3 @@
-import { BrandMark } from '@/components/brand/BrandMark'
 import { cn } from '@/lib/utils'
 
 import { CopyButton } from './CopyButton'
