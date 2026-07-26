@@ -1,0 +1,88 @@
+{
+  "title": "गाँव का रहस्यमयी स्वागत — Part 1",
+  "language": "hi",
+  "narration_config": {
+    "pov": "third_limited",
+    "cast_model": "multicast",
+    "platform_style": "pocket_fm_serial",
+    "soundscape": true,
+    "narrators": [
+      {
+        "id": "NARRATOR",
+        "voice_notes": "Hindi horror suspense narrator, low ominous, measured dread"
+      }
+    ]
+  },
+  "bible": {
+    "characters": [
+      {
+        "id": "narrator",
+        "name": "NARRATOR",
+        "role": "guide",
+        "voice": "Hindi horror suspense narrator male low ominous",
+        "speech_patterns": "suspenseful, tense, ominous pauses",
+        "arc": "guides the family into the village mystery"
+      },
+      {
+        "id": "rajesh",
+        "name": "RAJESH",
+        "role": "protagonist",
+        "voice": "Hindi adult man father cautious determined",
+        "speech_patterns": "cautious, uneasy, then determined",
+        "arc": "father protecting family, forces himself forward"
+      },
+      {
+        "id": "anita",
+        "name": "ANITA",
+        "role": "supporting",
+        "voice": "Hindi adult woman mother concerned soft",
+        "speech_patterns": "concerned, hesitant",
+        "arc": "mother sensing danger, questions advancing"
+      },
+      {
+        "id": "priya",
+        "name": "PRIYA",
+        "role": "supporting",
+        "voice": "Hindi young girl curious soft",
+        "speech_patterns": "curious, pointing out details",
+        "arc": "child who notices the lamp in the hut"
+      }
+    ],
+    "locations": [
+      {
+        "id": "village_boundary",
+        "name": "अजनबी गाँव की सीमा — empty rural dirt road at dusk/night",
+        "notes": "deserted Indian village outskirts, wind, no people visible"
+      },
+      {
+        "id": "path_to_hut",
+        "name": "गाँव के अंदर कच्चा रास्ता leading to a lonely झोपड़ी",
+        "notes": "gravel path, distant dog bark, one hut with a flickering oil lamp"
+      },
+      {
+        "id": "mysterious_hut",
+        "name": "अकेली झोपड़ी with creaking door and waiting shadow",
+        "notes": "mud/thatch hut, lamp glow, ominous silhouette inside doorway"
+      }
+    ]
+  },
+  "parts": [
+    {
+      "part_number": 1,
+      "title": "गाँव का रहस्यमयी स्वागत",
+      "target_duration_sec": 90,
+      "screenplay": "NARRATOR: [suspenseful] अजनबी गाँव की सीमाओं को पार करते ही, राजेश और उसका परिवार रहस्यमयी खामोशी से घिर जाते हैं।\n\n[sfx: wind howling]\n\nRAJESH: [cautious, uneasy] यह सन्नाटा कुछ ठीक नहीं लग रहा। हर तरफ अजीब सी गंध भी है।\n\n[sfx: sniffing sound]\n\nANITA: [concerned] यहाँ कोई दिखाई नहीं दे रहा। क्या हमें आगे बढ़ना चाहिए?\n\n[sfx: distant dog barking]\n\nPRIYA: [curious] माँ, देखो! वह झोपड़ी... वहाँ एक दीपक जल रहा है।\n\n[sfx: lamp flickering]\n\nNARRATOR: [tense] परिवार ने झोपड़ी की ओर बढ़ना शुरू किया, हर कदम के साथ रहस्य और भय का मिश्रण गहराता जा रहा था।\n\n[sfx: footsteps on gravel]\n\nRAJESH: [determined] चलो, देखते हैं अंदर क्या है।\n\n[sfx: creaking door]\n\nNARRATOR: [ominous] जैसे ही वे झोपड़ी के पास पहुँचे, एक अनजानी छाया उनके स्वागत के लिए तैयार थी।\n\n[sfx: thunder rumbling]",
+      "cliff_out": "गाँव के रहस्यों के बीच, क्या परिवार सुरक्षित रह पाएगा?",
+      "sfx_cues": [
+        "wind howling empty village night ambience",
+        "person sniffing air cautiously foley",
+        "distant dog barking rural night",
+        "oil lamp flickering soft crackle",
+        "footsteps on gravel path approaching hut",
+        "old wooden hut door creaking open horror",
+        "distant thunder rumbling ominous"
+      ]
+    }
+  ],
+  "total_duration_sec": 90
+}

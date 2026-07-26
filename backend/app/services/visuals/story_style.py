@@ -17,15 +17,21 @@ from typing import Any
 
 log = logging.getLogger(__name__)
 
-# Ordered — first match wins in the heuristic fallback.
+# Scored by hit count — more hits wins (not first-match).
 _GENRE_KEYWORDS: list[tuple[str, str]] = [
     ("sports", r"cricket|football|kabaddi|match|stadium|tournament|खेल|क्रिकेट|मैदान|टीम|जीत"),
-    ("horror", r"ghost|haunt|paranormal|भूत|आत्मा|डरावन|प्रेत|साया"),
+    (
+        "horror",
+        r"ghost|haunt|paranormal|horror|ominous|dread|shadow|flickering|thunder|"
+        r"भूत|आत्मा|डरावन|प्रेत|साया|छाया|रहस्य|रहस्यमयी|सन्नाटा|खामोशी|भय|डराव|"
+        r"अनजानी|झोपड़ी|अजनबी\s*गाँव|दीपक|howling|creaking",
+    ),
     ("crime_thriller", r"murder|crime|police|inspector|forensic|detective|खून|हत्या|पुलिस|लाश|जासूस|अपराध"),
     ("romance", r"love|romance|प्यार|इश्क़|मोहब्बत|दिल|शादी|wedding"),
     ("comedy", r"comedy|funny|hilarious|मज़ाक|हंसी|कॉमेडी"),
     ("mythology", r"mytholog|पुराण|देवता|ऋषि|राक्षस|महल|राजा|kingdom|राज्य"),
-    ("family_drama", r"family|परिवार|माँ|पिताजी|बेटा|बेटी|बहू|सास|घर"),
+    # Family conflict / home melodrama — NOT every script that mentions माँ/परिवार
+    ("family_drama", r"family drama|सास-बहू|बहू|सास|दामाद|joint family|घरवाले|रिश्ता|रिश्ते"),
 ]
 
 _GENRE_PRESETS: dict[str, dict[str, str]] = {
@@ -117,6 +123,9 @@ def heuristic_style_guide(package: dict[str, Any]) -> dict[str, str]:
         name: len(re.findall(pattern, text, re.I))
         for name, pattern in _GENRE_KEYWORDS
     }
+    # A family traveling through a haunted village is horror, not family_drama.
+    if scores.get("horror", 0) >= 2 and scores.get("family_drama", 0) <= scores.get("horror", 0):
+        scores["family_drama"] = 0
     genre = max(scores, key=scores.get) if any(scores.values()) else "drama"
     guide = {"genre": genre, "era_setting": "modern-day India", **_GENRE_PRESETS[genre]}
     log.info("story_style_heuristic genre=%s scores=%s", genre, scores)

@@ -38,6 +38,23 @@ _LOCATION_HINTS = [
     (re.compile(r"office|दफ़्तर|ऑफ़िस|meeting", re.I), "office"),
     (re.compile(r"बाज़ार|market|दुकान|shop|mall", re.I), "market / shop"),
     (re.compile(r"मंदिर|temple|मस्जिद|church|गुरुद्वारा", re.I), "place of worship"),
+    # Village / rural horror — before generic "street" so गाँव beats city road
+    (
+        re.compile(
+            r"गाँव\s*की\s*सीमा|अजनबी\s*गाँव|village\s*boundary|empty\s*village|"
+            r"सन्नाटा|खामोशी.*गाँव|गाँव.*खामोशी",
+            re.I,
+        ),
+        "deserted Indian village outskirts — empty dirt road, no people, night wind",
+    ),
+    (
+        re.compile(r"झोपड़ी|hut|cabin|दीपक\s*जल|lamp\s*flicker|oil\s*lamp", re.I),
+        "lonely mud-thatch village hut with a flickering oil lamp in the doorway",
+    ),
+    (
+        re.compile(r"footsteps on gravel|कच्चा\s*रास्ता|gravel|झोपड़ी की ओर", re.I),
+        "gravel path through deserted village toward the hut",
+    ),
     (re.compile(r"गाड़ी|car|jeep|सड़क|street|बारिश.*सड़क", re.I), "street / car travel"),
     (re.compile(r"कमरा|bedroom|फ़ोन|apartment|बेड", re.I), "bedroom / apartment"),
     (re.compile(r"रसोई|kitchen|आँगन|courtyard|dining|खाना", re.I), "family home interior"),
@@ -124,6 +141,17 @@ def extract_scene_hints(
         joined = " ".join(buf_text)
         remote = bool(re.search(r"फ़ोन|phone|call|बोलो", joined, re.I)) and len(current_speakers) <= 1
         colocated = [] if remote else sorted(current_speakers)
+        # Narration about "the family" / परिवार ⇒ whole on-screen cast is present
+        if not remote and re.search(r"परिवार|family", joined, re.I):
+            colocated = sorted(set(colocated) | set(cast_ids))
+        # Carry companions across contiguous outdoor beats (journey / village walk)
+        if (
+            not remote
+            and scenes
+            and not scenes[-1].get("remote_dialogue")
+            and scenes[-1].get("colocated_characters")
+        ):
+            colocated = sorted(set(colocated) | set(scenes[-1]["colocated_characters"]))
         # Forensic: all cast who appear later in lab context
         if re.search(r"lab|forensic|लैब|पोस्टमॉर्टम|ज़हर|body", joined, re.I):
             colocated = sorted(set(colocated) | set(cast_ids))
@@ -141,12 +169,13 @@ def extract_scene_hints(
 
     for ev in parsed.events:
         chunk = ""
+        speaker_to_add: str | None = None
         if ev.sfx_cue:
             chunk = ev.sfx_cue
         if ev.line:
             chunk = f"{ev.line.speaker}: {ev.line.text}"
             if ev.line.speaker.upper() not in ("NARRATOR", "GUIDE"):
-                current_speakers.add(ev.line.speaker.upper())
+                speaker_to_add = ev.line.speaker.upper()
         if not chunk:
             continue
         for rx, loc in _LOCATION_HINTS:
@@ -154,6 +183,9 @@ def extract_scene_hints(
                 flush()
                 current_loc = loc
                 break
+        # Add speaker after a location flush so they belong to the NEW scene.
+        if speaker_to_add:
+            current_speakers.add(speaker_to_add)
         buf_text.append(chunk)
     flush()
 
@@ -247,7 +279,10 @@ def _repair_multi_character_coverage(
     """
     hint_by_id = {h["scene_id"]: h for h in scene_hints}
     multi_sizes = {"two_shot", "ots", "group"}
-    travel_space = re.compile(r"street|car|jeep|road|windshield|exterior|सड़क|गाड़ी", re.I)
+    travel_space = re.compile(
+        r"street\s*/\s*car|car travel|jeep|windshield|vehicle|बारिश.*सड़क|गाड़ी",
+        re.I,
+    )
 
     for scene in plan.scenes:
         loc = scene.location or ""
