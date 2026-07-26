@@ -191,11 +191,28 @@ async def project_run_job(ctx: dict, project_id: str, run_id: str) -> dict:
             if isinstance(package, dict):
                 await characters.upsert_from_bible(project_id, bible_characters(package))
 
+            from app.services.agent_render.service import is_headless_run
             from app.services.projects.stages import StagesService
 
             fresh = await runs.get(run_id)
             if fresh:
                 await StagesService(session, redis=None).mark_script_pending(fresh)
+                await session.flush()
+                fresh = await runs.get(run_id) or fresh
+                if is_headless_run(fresh):
+                    redis = ctx.get("redis")
+                    if redis is None:
+                        logger.error(
+                            "headless_auto_approve_skipped — redis missing in worker ctx"
+                        )
+                    else:
+                        await StagesService(session, redis=redis).approve_stage(
+                            project_id, run_id, "script"
+                        )
+                        logger.info(
+                            "headless_script_auto_approved",
+                            extra={"project_id": project_id, "run_id": run_id},
+                        )
             else:
                 await runs.update_status(run_id, status="succeeded", error=None)
             await session.commit()

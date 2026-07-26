@@ -119,6 +119,17 @@ class Settings(BaseSettings):
 
     allowed_origins: list[str] = ["*"]
 
+    # Absolute API origin for agent/MCP audio URLs (e.g. http://localhost:8000).
+    public_api_base_url: str = Field(
+        default="http://localhost:8000",
+        validation_alias=AliasChoices("PUBLIC_API_BASE_URL"),
+    )
+    # Optional override for the copyable MCP endpoint shown in UI / catalog.
+    mcp_public_url: str = Field(
+        default="",
+        validation_alias=AliasChoices("MCP_PUBLIC_URL", "VITE_MCP_URL"),
+    )
+
     @property
     def databricks_cast_table_fqn(self) -> str:
         return f"{self.databricks_catalog}.{self.databricks_schema}.{self.databricks_cast_table}"
