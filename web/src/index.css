@@ -392,14 +392,55 @@ body {
   animation: not-found-enter 320ms var(--ease-out) both;
 }
 
+@keyframes mcp-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.mcp-enter {
+  animation: mcp-enter 420ms var(--ease-out) both;
+}
+
+.mcp-enter-delayed {
+  animation: mcp-enter 420ms var(--ease-out) 80ms both;
+}
+
+.mcp-enter-late {
+  animation: mcp-enter 420ms var(--ease-out) 140ms both;
+}
+
+@keyframes mcp-copy-pulse {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--brand) 35%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 8px transparent;
+  }
+}
+
+.mcp-copy-pulse {
+  animation: mcp-copy-pulse 650ms var(--ease-out);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .not-found-enter,
   .not-found-bar,
-  .chat-stream-cursor {
+  .chat-stream-cursor,
+  .mcp-enter,
+  .mcp-enter-delayed,
+  .mcp-enter-late,
+  .mcp-copy-pulse {
     animation: none;
   }
   .chat-stream-cursor {
     opacity: 0.6;
   }
 }
+
 

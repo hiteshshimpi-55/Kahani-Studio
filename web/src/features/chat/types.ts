@@ -29,6 +29,12 @@ export type PitchResearchMeta = {
   sources?: number
 }
 
+export type ResearchSource = {
+  url: string
+  title?: string
+  snippet?: string
+}
+
 export type AgentToolStep = {
   id: string
   label: string

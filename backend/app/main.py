@@ -12,6 +12,8 @@ from app.core.config import settings
 from app.core.db.session import Base, engine
 from app.core.logging import configure_logging
 from app.integrations.redis.client import close_redis_pool, create_redis_pool
+from app.mcp.runtime import set_mcp_redis
+from app.mcp.server import create_mcp_http_app
 
 configure_logging()
 
@@ -24,6 +26,8 @@ import app.repository.models.series  # noqa: F401
 import app.repository.models.visual  # noqa: F401
 
 log = logging.getLogger(__name__)
+
+mcp_http_app = create_mcp_http_app()
 
 
 async def _ensure_schema() -> None:
@@ -108,8 +112,19 @@ async def lifespan(app: FastAPI):
             "langgraph_checkpoint_setup_failed — chat history / runs need Postgres checkpointer"
         )
     app.state.redis = await create_redis_pool()
+    set_mcp_redis(app.state.redis)
     log.info("startup_complete", extra={"data_dir": settings.data_dir})
-    yield
+
+    # Streamable HTTP MCP requires its session-manager lifespan (mounted apps
+    # do not inherit nested Starlette lifespans automatically).
+    mcp_lifespan = getattr(mcp_http_app.router, "lifespan_context", None)
+    if mcp_lifespan is not None:
+        async with mcp_lifespan(mcp_http_app):
+            yield
+    else:
+        yield
+
+    set_mcp_redis(None)
     try:
         from app.agents.graph.checkpointer import shutdown_checkpointer
 
@@ -133,3 +148,5 @@ app.add_middleware(
 )
 
 app.include_router(router, prefix=settings.api_prefix)
+# Streamable HTTP MCP — copyable URL: {PUBLIC_API_BASE_URL}/mcp
+app.mount("/mcp", mcp_http_app)
