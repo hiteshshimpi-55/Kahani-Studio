@@ -38,6 +38,8 @@ export default defineConfig({
           })
         },
       },
+      // Do not proxy /mcp — that path is the in-app React page.
+      // MCP Streamable HTTP lives on the API: http://localhost:8000/mcp/
     },
   },
 })
