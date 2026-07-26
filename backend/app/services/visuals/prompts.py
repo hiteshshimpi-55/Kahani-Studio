@@ -262,21 +262,37 @@ def build_shot_prompt(
         if not who and shot.shot_size in ("establishing_wide", "wide", "insert")
         else ""
     )
-    lab_note = ""
+    loc_note = ""
     loc = (scene.location or "").lower()
     if "lab" in loc or "forensic" in loc:
-        lab_note = (
+        loc_note = (
             "Bright sterile forensic lab, cool fluorescent lighting, clean metal "
             "tables, clinical — NOT a dark horror hallway. "
+        )
+    elif any(k in loc for k in ("village", "hut", "झोपड़ी", "गाँव", "gravel", "dirt road")):
+        loc_note = (
+            "Rural North Indian village realism: mud houses, thatch roofs, dirt "
+            "paths, sparse trees, NO modern city skyline, NO apartment interiors, "
+            "NO brightly lit urban streets. "
+        )
+    genre = (plan.style.genre or "").lower()
+    genre_note = ""
+    if "horror" in genre:
+        genre_note = (
+            "Horror atmosphere: eerie stillness, motivated practical light only "
+            "(moon, lamp, lightning), faces readable but surroundings oppressive. "
+            "NOT a cheerful family portrait, NOT daylight comedy. "
         )
     expression = f"EXPRESSIONS: {shot.expression}. " if (shot.expression or "").strip() and who else ""
     angle_text = _ANGLE_TEXT.get(shot.camera_angle, _ANGLE_TEXT["eye"])
     return (
-        f"Cinematic film still, {size_text}. LOCATION: {scene.location}, "
-        f"{scene.time_of_day}{weather}, {scene.mood} mood. "
+        f"Cinematic film still, {size_text}. "
+        f"SCENE LOCK (must match exactly): LOCATION={scene.location}; "
+        f"TIME={scene.time_of_day}{weather}; MOOD={scene.mood}. "
         f"{_lighting_for(scene)} "
-        f"{lab_note}{empty}{cast_text}{expression}"
-        f"ACTION (follow exactly): {shot.action} "
+        f"{loc_note}{genre_note}{empty}{cast_text}{expression}"
+        f"ACTION (follow exactly — do not invent a different place or story): "
+        f"{shot.action} "
         f"{angle_text} Match reference faces exactly. "
         f"Compose for a vertical 9:16 crop: keep all faces and key subjects in "
         f"the central area — the outer 15% of the left and right edges will be "
