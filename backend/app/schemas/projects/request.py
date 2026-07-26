@@ -67,3 +67,7 @@ class ChatMessageRequest(BaseModel):
 class RejectStageRequest(BaseModel):
     action: Literal["regenerate", "revise"] = Field(description="regenerate | revise")
     notes: str | None = Field(default=None, max_length=4000)
+
+
+class ExportScriptRequest(BaseModel):
+    format: Literal["markdown", "audio", "cover"]

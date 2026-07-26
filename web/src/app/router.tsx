@@ -9,6 +9,7 @@ import { LibraryPage } from '@/features/library/pages/LibraryPage'
 import { McpPage } from '@/features/mcp/pages/McpPage'
 import { ProjectContextPage } from '@/features/projects/pages/ProjectContextPage'
 import { ProjectDraftsPage } from '@/features/projects/pages/ProjectDraftsPage'
+import { ProjectExportPage } from '@/features/projects/pages/ProjectExportPage'
 import { ProjectVisualsPage } from '@/features/projects/pages/ProjectVisualsPage'
 import { ProjectsPage } from '@/features/projects/pages/ProjectsPage'
 import { NotFoundPage } from '@/features/system/pages/NotFoundPage'
@@ -36,6 +37,7 @@ export const router = createBrowserRouter([
         element: <Navigate to="../drafts" relative="path" replace />,
       },
       { path: 'projects/:projectId/visuals', element: <ProjectVisualsPage /> },
+      { path: 'projects/:projectId/export', element: <ProjectExportPage /> },
       {
         path: 'projects/:projectId/editor',
         element: <Navigate to="/editor" replace />,
