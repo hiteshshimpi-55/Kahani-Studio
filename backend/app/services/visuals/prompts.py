@@ -1,8 +1,10 @@
 """Prompt builders for the visual pipeline.
 
-Director is RAG-backed: retrieved shot templates from the vector catalog
-steer framing. Hard rules force multi-character coverage whenever people
-are physically co-located (no more lonely singles in a crowded lab).
+Every prompt is grounded in the STORY STYLE GUIDE (genre, palette,
+lighting, time of day) derived from the script itself — a cricket story
+renders bright daylight, a horror story renders dark. RAG shot templates
+steer framing; hard rules force multi-character coverage whenever people
+are physically co-located.
 """
 
 from __future__ import annotations
@@ -34,14 +36,16 @@ C. TWO PEOPLE IN SAME LOCATION
 
 D. THREE OR MORE IN SAME LOCATION
    Open with a GROUP shot showing ALL of them, then OTS / singles.
-   Example: doctor + inspector + junior officer at a forensic table with
-   the body/evidence visible → GROUP first, then OTS doctor→police,
-   then reaction.
+   Examples: teammates in a dressing room before the final over;
+   doctor + inspector + junior officer at a forensic table;
+   the whole family around the dining table during the argument.
 
-E. FORENSIC / REVEAL BEATS
-   If a doctor/expert presents findings to police: at least ONE shot must
-   be group or two_shot with doctor + police(s) + body/evidence ON SCREEN
-   together. Never show only the doctor's face while police are "off-screen".
+E. REVEAL / PRESENTATION BEATS
+   When one character shows or explains something to others (coach's plan,
+   expert's findings, a family secret): at least ONE shot must be group or
+   two_shot with the presenter + listeners + the object of attention ON
+   SCREEN together. Never show only the presenter's face while listeners
+   are "off-screen".
 
 F. SHOT SIZES
    establishing_wide | wide | medium | two_shot | ots | close_up |
@@ -54,9 +58,13 @@ G. 180° RULE
 H. PACING
    4–8s typical; 2.5–4s action; 8–11s reflective. Tile full audio duration.
 
-I. CAMERA MOTION
-   slow_push_in | slow_pull_out | pan_left | pan_right | static
-   Do not repeat the same motion more than twice in a row.
+I. CAMERA
+   motion: slow_push_in | slow_pull_out | pan_left | pan_right | static
+   angle:  eye | low | high | overhead | pov | dutch
+   Vary both — do not repeat the same motion more than twice in a row, and
+   do not put every shot at eye level. Low angle for power/heroics, high
+   for vulnerability, overhead for geography, pov for immersion,
+   dutch (sparingly) for unease.
 
 J. WARDROBE
    Same outfit for a story_day; change only when the day changes.
@@ -64,6 +72,12 @@ J. WARDROBE
 K. NARRATOR
    Never on screen (voice-of-god). Use scenery, inserts, or the characters
    the narration is about — if narration describes people together, SHOW them together.
+
+L. LIGHT FOLLOWS THE STORY
+   time_of_day comes from the SCRIPT, not from genre habit. A morning
+   match is bright sun; a night chase is dark. Interiors like labs,
+   offices, and classrooms are lit bright and functional even in dark
+   stories. NEVER make every scene dark by default.
 """
 
 
@@ -86,18 +100,24 @@ def build_director_prompt(
     *,
     retrieved_templates: list[dict[str, Any]] | None = None,
     scene_hints: list[dict[str, Any]] | None = None,
+    style_guide: dict[str, Any] | None = None,
 ) -> str:
     bible = package.get("bible") or {}
     templates_block = _format_templates(retrieved_templates or [])
     scenes_block = json.dumps(scene_hints or [], ensure_ascii=False, indent=1)
+    style_block = json.dumps(style_guide or {}, ensure_ascii=False, indent=1)
 
     return f"""You are the GENERIC VISUAL DIRECTOR for a Pocket FM / Kuku TV–style
-vertical (9:16) audio-drama studio. This pipeline runs for ANY script after
-audiobook audio exists. You do NOT invent coverage from scratch — you SELECT
-and ADAPT shot templates from the retrieved catalog, then fill in story-specific
-action, wardrobe, and blocking.
+vertical (9:16) audio-drama studio. This pipeline runs for ANY script and ANY
+genre after audiobook audio exists. You do NOT invent coverage from scratch —
+you SELECT and ADAPT shot templates from the retrieved catalog, then fill in
+story-specific action, wardrobe, expressions, and blocking.
 
 {FILM_GRAMMAR_RULES}
+
+STORY STYLE GUIDE (analysed from the script — your final style MUST agree
+with this; refine wording but never contradict the genre or time of day):
+{style_block}
 
 EPISODE TITLE: {package.get("title")}
 LANGUAGE: {package.get("language")}
@@ -116,19 +136,22 @@ prefer multi-character templates whenever people share a location):
 
 Return ONLY JSON:
 {{
- "style": {{"era_setting": str, "film_look": str, "palette": str, "lighting": str}},
+ "style": {{"genre": str, "era_setting": str, "film_look": str, "palette": str, "lighting": str}},
  "characters": [{{"id": "SPEAKER_ID_UPPERCASE", "name": str,
    "appearance": "very specific face/age/build/hair — permanent",
    "wardrobe": {{"day1": "full outfit with fabrics/colors"}},
    "facing": "right"|"left"}}],
  "scenes": [{{"scene_id": "s1", "location": "rich specific place",
-   "time_of_day": str, "story_day": "day1", "weather": str|null, "mood": str}}],
+   "time_of_day": "as written in the SCRIPT for this beat",
+   "story_day": "day1", "weather": str|null, "mood": str}}],
  "shots": [{{"shot_id": "sh01", "scene_id": "s1",
    "t_start": float, "t_end": float,
    "shot_size": "establishing_wide"|"wide"|"medium"|"two_shot"|"ots"|"close_up"|"extreme_close_up"|"insert"|"group",
    "characters_on_screen": ["SPEAKER_ID", ...],
    "action": "concrete present-tense what is VISIBLE — if people are together, name them ALL in the action",
+   "expression": "each on-screen character's facial emotion for this beat",
    "camera_motion": "slow_push_in"|"slow_pull_out"|"pan_left"|"pan_right"|"static",
+   "camera_angle": "eye"|"low"|"high"|"overhead"|"pov"|"dutch",
    "seq_ids": [..]}}]
 }}
 
@@ -138,25 +161,52 @@ HARD CONSTRAINTS:
 2. Shots tile [0, duration] contiguously.
 3. For every co-located multi-character scene: include ≥1 two_shot OR group,
    plus OTS coverage. characters_on_screen must list EVERY person visible.
-4. Lab / forensic / "showing the body" beats: mandatory group or two_shot with
-   doctor + police + body/evidence all visible. Lab must look STERILE and
-   BRIGHT (fluorescent), never horror-dark corridors with glowing eyes.
-5. Phone-only / waking-alone beats: singles OK; establishing bedroom MUST be
-   EMPTY (no person silhouette) before the waking MCU.
+4. STYLE = STORY. Copy the genre/palette/lighting direction from the STORY
+   STYLE GUIDE. Scene time_of_day must match the script beat. Bright story
+   beats stay bright; functional interiors (lab, office, classroom) are lit
+   bright and clean even inside dark genres.
+5. Establishing shots before a character enters MUST be empty — no
+   silhouettes or invented people.
 6. Never write "off-screen" for someone who is in that scene's location.
 7. Prefer the RETRIEVED SHOT TEMPLATES: copy their shot_size + camera_motion
    and paraphrase COMPOSE into action. Do not invent random coverage.
-8. Jeep / car departure: prefer windshield POV or exterior jeep headlights —
-   not a fashion portrait of the hero standing in the street.
+8. Vehicle departures/travel: prefer POV through the windshield or an
+   exterior vehicle shot — not a fashion portrait of the hero standing still.
 9. series_id is "{series_id}" — omit from JSON.
 """
+
+
+_TOD_LIGHT = (
+    (("morning", "sunrise", "dawn", "सुबह"), "Bright fresh morning light, long soft shadows, clear visibility."),
+    (("noon", "afternoon", "day", "daytime", "दिन", "दोपहर"), "Bright natural daylight, open sun, true-to-life vivid colors, everything clearly visible."),
+    (("evening", "sunset", "dusk", "golden", "शाम"), "Warm golden-hour light, amber sky, gentle contrast."),
+    (("night", "midnight", "रात"), "Night scene with motivated practical lights — faces still clearly lit and readable, never murky."),
+)
+
+_ANGLE_TEXT = {
+    "eye": "Camera at eye level, natural film blocking.",
+    "low": "Low-angle shot looking up at the subject — powerful, heroic framing.",
+    "high": "High-angle shot looking down — subject appears small or vulnerable.",
+    "overhead": "Top-down overhead shot showing the spatial geography of the scene.",
+    "pov": "First-person POV shot — the camera sees exactly what the character sees.",
+    "dutch": "Slight dutch tilt for unease, horizon subtly canted.",
+}
+
+
+def _lighting_for(scene: SceneSpec) -> str:
+    tod = (scene.time_of_day or "").lower()
+    for keys, text in _TOD_LIGHT:
+        if any(k in tod for k in keys):
+            return text
+    return "Natural lighting motivated by the location and time of day."
 
 
 def style_suffix(plan: EpisodeVisualPlan) -> str:
     s = plan.style
     return (
-        f" Style: {s.film_look}, {s.palette} palette, {s.lighting} lighting,"
-        f" {s.era_setting}. Vertical 9:16 cinematic frame."
+        f" Style: {s.genre} story — {s.film_look}, {s.palette} palette,"
+        f" {s.lighting}, {s.era_setting}. Photorealistic real photography,"
+        f" natural skin texture, true colors. Vertical 9:16 cinematic frame."
         f" Absolutely no text, captions, subtitles, watermarks, logos, badges with"
         f" lettering, name tags, or readable writing anywhere in the image."
     )
@@ -219,11 +269,17 @@ def build_shot_prompt(
             "Bright sterile forensic lab, cool fluorescent lighting, clean metal "
             "tables, clinical — NOT a dark horror hallway. "
         )
+    expression = f"EXPRESSIONS: {shot.expression}. " if (shot.expression or "").strip() and who else ""
+    angle_text = _ANGLE_TEXT.get(shot.camera_angle, _ANGLE_TEXT["eye"])
     return (
         f"Cinematic film still, {size_text}. LOCATION: {scene.location}, "
         f"{scene.time_of_day}{weather}, {scene.mood} mood. "
-        f"{lab_note}{empty}{cast_text}"
+        f"{_lighting_for(scene)} "
+        f"{lab_note}{empty}{cast_text}{expression}"
         f"ACTION (follow exactly): {shot.action} "
-        f"Camera at eye level, natural film blocking. Match reference faces exactly."
+        f"{angle_text} Match reference faces exactly. "
+        f"Compose for a vertical 9:16 crop: keep all faces and key subjects in "
+        f"the central area — the outer 15% of the left and right edges will be "
+        f"cropped away."
         + style_suffix(plan)
     )

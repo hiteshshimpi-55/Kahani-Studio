@@ -13,12 +13,13 @@ SHOT_SIZES = ("establishing_wide", "wide", "medium", "two_shot", "ots", "close_u
 
 
 class StyleSpec(BaseModel):
-    """Series-level look — applied to every prompt for coherence."""
+    """Series-level look — derived from the STORY (genre/tone), not defaults."""
 
+    genre: str = "drama"
     era_setting: str = "modern-day India"
     film_look: str = "cinematic photorealistic, 35mm film, shallow depth of field"
-    palette: str = "moody teal and amber"
-    lighting: str = "naturalistic, dramatic"
+    palette: str = "true-to-life natural colors"
+    lighting: str = "natural, motivated by the real time of day of each scene"
     negative: str = "cartoon, anime, illustration, text, watermark, extra fingers, deformed face"
 
 
@@ -59,6 +60,14 @@ class ShotSpec(BaseModel):
     camera_motion: str = Field(
         default="slow_push_in",
         description="ken burns motion: slow_push_in | slow_pull_out | pan_left | pan_right | static",
+    )
+    camera_angle: str = Field(
+        default="eye",
+        description="camera angle: eye | low | high | overhead | pov | dutch",
+    )
+    expression: str = Field(
+        default="",
+        description="Visible facial emotion of each on-screen character in this beat",
     )
     seq_ids: list[str] = Field(default_factory=list, description="Audio stems this shot covers")
 

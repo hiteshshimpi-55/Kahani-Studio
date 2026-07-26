@@ -26,15 +26,22 @@ from app.schemas.visuals import (
     StyleSpec,
 )
 from app.services.visuals.prompts import build_director_prompt
+from app.services.visuals.story_style import analyze_story_style
 
 log = logging.getLogger(__name__)
 
 _NARRATOR_ROLES = frozenset({"narrator", "guide"})
 _LOCATION_HINTS = [
     (re.compile(r"लैब|lab|forensic|फ़ॉरेंसिक|पोस्टमॉर्टम|autopsy", re.I), "forensic laboratory"),
-    (re.compile(r"गाड़ी|car|jeep|सड़क|street|बारिश.*सड़क", re.I), "rain-slicked night street / car"),
-    (re.compile(r"कमरा|bedroom|फ़ोन|apartment|बेड", re.I), "bedroom apartment night"),
-    (re.compile(r"अदालत|court", re.I), "courtroom"),
+    (re.compile(r"stadium|मैदान|pitch|ground|क्रिकेट|match", re.I), "sports ground / stadium"),
+    (re.compile(r"school|college|classroom|स्कूल|कॉलेज|कक्षा", re.I), "school / college"),
+    (re.compile(r"office|दफ़्तर|ऑफ़िस|meeting", re.I), "office"),
+    (re.compile(r"बाज़ार|market|दुकान|shop|mall", re.I), "market / shop"),
+    (re.compile(r"मंदिर|temple|मस्जिद|church|गुरुद्वारा", re.I), "place of worship"),
+    (re.compile(r"गाड़ी|car|jeep|सड़क|street|बारिश.*सड़क", re.I), "street / car travel"),
+    (re.compile(r"कमरा|bedroom|फ़ोन|apartment|बेड", re.I), "bedroom / apartment"),
+    (re.compile(r"रसोई|kitchen|आँगन|courtyard|dining|खाना", re.I), "family home interior"),
+    (re.compile(r"अदालत|court(?!yard)", re.I), "courtroom"),
     (re.compile(r"थाना|police station|interrogat", re.I), "police station"),
 ]
 
@@ -165,14 +172,21 @@ def extract_scene_hints(
 def _retrieve_for_episode(
     package: dict[str, Any],
     scene_hints: list[dict[str, Any]],
+    style_guide: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
-    """Pull a diverse template set covering the whole episode."""
+    """Pull a diverse template set covering the whole episode.
+
+    Queries are built from the story itself (title + genre + scenes) —
+    never hardcoded to one genre.
+    """
+    guide = style_guide or {}
+    genre = guide.get("genre", "drama")
     queries = [
-        f"{package.get('title', '')} thriller crime drama vertical film coverage",
+        f"{package.get('title', '')} {genre} vertical film coverage",
+        f"{genre} {guide.get('environment_notes', '')[:120]} establishing wide",
         "two shot dialogue colocated conversation over the shoulder",
-        "group forensic lab doctor police body evidence reveal",
-        "establishing wide night rain bedroom street car travel",
-        "phone call single insert reaction close up",
+        "group shot everyone visible together reveal presentation",
+        "single insert reaction close up emotional beat",
     ]
     for sc in scene_hints:
         q = (
@@ -233,22 +247,16 @@ def _repair_multi_character_coverage(
     """
     hint_by_id = {h["scene_id"]: h for h in scene_hints}
     multi_sizes = {"two_shot", "ots", "group"}
-    shared_space = re.compile(
-        r"lab|forensic|autopsy|station|interrogat|office|court|hospital|"
-        r"लैब|फ़ॉरेंसिक|थाना|अदालत",
-        re.I,
-    )
     travel_space = re.compile(r"street|car|jeep|road|windshield|exterior|सड़क|गाड़ी", re.I)
 
     for scene in plan.scenes:
         loc = scene.location or ""
-        if travel_space.search(loc) and not shared_space.search(loc):
-            continue
-        if not shared_space.search(loc):
-            continue
-
         hint = hint_by_id.get(scene.scene_id) or {}
         if hint.get("remote_dialogue"):
+            continue
+        if travel_space.search(loc):
+            continue
+        if not hint.get("must_include_multi_character_frames"):
             continue
 
         colocated = [c.upper() for c in (hint.get("colocated_characters") or [])]
@@ -277,9 +285,9 @@ def _repair_multi_character_coverage(
             target.shot_size = "group"
             target.characters_on_screen = colocated[:4]
             target.action = (
-                f"{', '.join(colocated)} together in {scene.location}: "
-                f"the expert presents findings while the others look at the "
-                f"body/evidence on the table. {target.action}"
+                f"{', '.join(colocated)} together in {scene.location}, all "
+                f"clearly visible and engaged with the focus of this beat. "
+                f"{target.action}"
             )
         else:
             target.shot_size = "two_shot"
@@ -306,11 +314,13 @@ class VisualDirector:
         use_llm: bool = True,
     ) -> EpisodeVisualPlan:
         scene_hints = extract_scene_hints(package, timeline)
-        templates = _retrieve_for_episode(package, scene_hints)
+        style_guide = analyze_story_style(package)
+        templates = _retrieve_for_episode(package, scene_hints, style_guide)
         log.info(
-            "director_context scenes=%d templates=%d sources=%s",
+            "director_context scenes=%d templates=%d genre=%s sources=%s",
             len(scene_hints),
             len(templates),
+            style_guide.get("genre"),
             sorted({t.get("source", "?") for t in templates}),
         )
 
@@ -321,6 +331,7 @@ class VisualDirector:
                     series_id=series_id,
                     scene_hints=scene_hints,
                     templates=templates,
+                    style_guide=style_guide,
                 )
             except Exception:
                 log.exception("director_llm_failed — falling back to heuristic planner")
@@ -328,6 +339,7 @@ class VisualDirector:
             package, timeline, duration,
             series_id=series_id,
             scene_hints=scene_hints,
+            style_guide=style_guide,
         )
 
     def _plan_llm(
@@ -339,6 +351,7 @@ class VisualDirector:
         series_id: str,
         scene_hints: list[dict[str, Any]],
         templates: list[dict[str, Any]],
+        style_guide: dict[str, Any] | None = None,
     ) -> EpisodeVisualPlan:
         prompt = build_director_prompt(
             package,
@@ -346,13 +359,19 @@ class VisualDirector:
             series_id,
             retrieved_templates=templates,
             scene_hints=scene_hints,
+            style_guide=style_guide,
         )
         raw = generate_json(prompt)
+        style_fields = {
+            k: v
+            for k, v in {**(style_guide or {}), **(raw.get("style") or {})}.items()
+            if k in StyleSpec.model_fields and v
+        }
         plan = EpisodeVisualPlan(
             series_id=series_id,
             title=package.get("title"),
             language=package.get("language") or "hi",
-            style=StyleSpec(**(raw.get("style") or {})),
+            style=StyleSpec(**style_fields),
             characters=[CharacterLook(**c) for c in raw.get("characters") or []],
             scenes=[SceneSpec(**s) for s in raw.get("scenes") or []],
             shots=[ShotSpec(**s) for s in raw.get("shots") or []],
@@ -377,14 +396,17 @@ class VisualDirector:
         *,
         series_id: str,
         scene_hints: list[dict[str, Any]],
+        style_guide: dict[str, Any] | None = None,
     ) -> EpisodeVisualPlan:
+        guide = style_guide or {}
+        default_tod = guide.get("default_time_of_day") or "day"
         cast = _on_screen_cast(package)
         characters = [
             CharacterLook(
                 id=c["id"],
                 name=c["id"],
                 appearance=f"Indian adult matching voice notes: {c.get('voice', '')}",
-                wardrobe={"day1": "story-appropriate Indian clothing, muted tones"},
+                wardrobe={"day1": "story-appropriate Indian clothing"},
                 facing="right" if i % 2 == 0 else "left",
             )
             for i, c in enumerate(cast)
@@ -393,11 +415,11 @@ class VisualDirector:
             SceneSpec(
                 scene_id=h["scene_id"],
                 location=h.get("location_hint") or "story location",
-                time_of_day="night",
-                mood="tense",
+                time_of_day=default_tod,
+                mood="engaged",
             )
             for h in scene_hints
-        ] or [SceneSpec(scene_id="s1", location="story location", time_of_day="night")]
+        ] or [SceneSpec(scene_id="s1", location="story location", time_of_day=default_tod)]
 
         # Map timeline into scenes by equal split for heuristic
         lines = [ev for ev in timeline if ev["type"] == "line"]
@@ -438,10 +460,14 @@ class VisualDirector:
                 )
             )
         shots = _snap_shots(shots, duration)
+        style_fields = {
+            k: v for k, v in guide.items() if k in StyleSpec.model_fields and v
+        }
         plan = EpisodeVisualPlan(
             series_id=series_id,
             title=package.get("title"),
             language=package.get("language") or "hi",
+            style=StyleSpec(**style_fields),
             characters=characters,
             scenes=scenes,
             shots=shots,

@@ -42,8 +42,15 @@ def _kenburns_filter(shot: ShotSpec, frames: int, w: int, h: int) -> str:
         zp = f"zoompan=z='min(1.001+{zoom_step / 3}*on,1.04)':{centre}"
     else:  # slow_push_in (default)
         zp = f"zoompan=z='min(1.001+{zoom_step}*on,1.12)':{centre}"
+    # Stills come out of gpt-image-1 as 2:3 (1024x1536) but the video is 9:16 —
+    # center-crop to the target aspect BEFORE zoompan, otherwise zoompan
+    # stretches the frame and every face looks distorted.
+    crop_to_aspect = (
+        f"crop='min(iw,2*floor(ih*{w}/{h}/2))':'min(ih,2*floor(iw*{h}/{w}/2))'"
+    )
     return (
         f"scale={_SUPERSAMPLE_W}:-2,"
+        f"{crop_to_aspect},"
         f"{zp}:d={frames}:s={w}x{h}:fps={settings.visual_video_fps},"
         f"format=yuv420p"
     )
