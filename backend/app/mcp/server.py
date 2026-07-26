@@ -7,6 +7,7 @@ import logging
 from typing import Any, Literal
 
 from mcp.server.fastmcp import FastMCP
+from mcp.server.transport_security import TransportSecuritySettings
 
 from app.core.db.session import AsyncSessionLocal
 from app.errors import AppError
@@ -15,6 +16,13 @@ from app.schemas.agent.request import StartAgentRenderRequest
 from app.services.agent_render.service import AgentRenderService
 
 logger = logging.getLogger(__name__)
+
+# Cursor / Claude often send Host/Origin that fail the SDK default allowlist
+# (transport_security=None → empty hosts + protection on → "Invalid Host header").
+# Off for local hackathon MCP; tighten before any public deploy.
+_MCP_TRANSPORT_SECURITY = TransportSecuritySettings(
+    enable_dns_rebinding_protection=False,
+)
 
 mcp = FastMCP(
     "Kahani",
@@ -26,7 +34,7 @@ mcp = FastMCP(
     stateless_http=True,
     # Mounted at FastAPI /mcp — keep streamable path at app root so URL is /mcp not /mcp/mcp.
     streamable_http_path="/",
-    transport_security=None,
+    transport_security=_MCP_TRANSPORT_SECURITY,
 )
 
 
