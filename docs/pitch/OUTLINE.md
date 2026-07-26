@@ -1,4 +1,4 @@
-# Kahani pitch — product-first (8 slides)
+# Kahani pitch — product-first (9 slides)
 
 **File:** [`Kahani_ZeroToOne_Pitch.pptx`](./Kahani_ZeroToOne_Pitch.pptx)  
 **Regenerate:** `python3 docs/pitch/generate_deck.py`  
@@ -11,11 +11,12 @@
 | 1 | Cover | Kahani + theme |
 | 2 | What we built | Shipped surfaces + production gates |
 | 3 | Tech stack | App · AI/media · Data (Databricks Vector / AI Search) |
-| 4 | Problem | Why serial production is broken |
-| 5 | How it works | Pipeline + ground → write → produce → assure |
-| 6 | Agents | 7 agents (storytelling → image) |
-| 7 | Agent handoff | Who does what in sequence |
-| 8 | Close | Ask · proof · stack highlight |
+| 4 | Architecture | Full deploy diagram ([`../Architecture_Diagram.png`](../Architecture_Diagram.png)) |
+| 5 | Problem | Why serial production is broken |
+| 6 | How it works | Pipeline + ground → write → produce → assure |
+| 7 | Agents | 7 agents (storytelling → image) |
+| 8 | Agent handoff | Who does what in sequence |
+| 9 | Close | Ask · proof · stack highlight |
 
 ## Agents (as presented)
 
@@ -29,4 +30,4 @@
 
 ## Spoken flow
 
-2 → 3 → 4 → 5 → 6 → live listen → 8. Slide 7 if judges ask handoffs.
+2 → 3 → 4 → 5 → 6 → 7 → live listen → 9. Slide 8 if judges ask handoffs.

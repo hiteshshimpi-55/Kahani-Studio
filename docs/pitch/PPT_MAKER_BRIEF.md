@@ -6,7 +6,7 @@ Copy everything below into Claude / Gamma / Beautiful.ai / any PPT maker.
 
 ## ROLE
 
-Senior presentation designer. Judge-facing hackathon deck for **Zero to One × Pocket FM**. Serious, enterprise, dark theme with Pocket FM red `#E6194D`. Exactly **8 slides**. No purple AI clichés. No overlapping text. Product name: **Kahani**.
+Senior presentation designer. Judge-facing hackathon deck for **Zero to One × Pocket FM**. Serious, enterprise, dark theme with Pocket FM red `#E6194D`. Exactly **9 slides**. No purple AI clichés. No overlapping text. Product name: **Kahani**.
 
 ## NARRATIVE ORDER (IMPORTANT)
 
@@ -15,7 +15,7 @@ Start with **what we built** and **tech stack** (including Databricks), then **p
 ## BRAND
 
 - Accent `#E6194D` · BG `#0F0F12` · Cards `#18181F` · Text `#F4F4F5` · Muted `#A1A1AA`
-- Footer: `Kahani · Zero to One × Pocket FM · IIM Bangalore` + `0N / 08`
+- Footer: `Kahani · Zero to One × Pocket FM · IIM Bangalore` + `0N / 09`
 - Fonts: Calibri / Inter / clean sans
 
 ---
@@ -63,7 +63,13 @@ Three columns:
 
 Bottom callout — Databricks in the loop: AI Search indexes story attachments for grounded scripting. Vector Search retrieves cast/voice assets and shot templates.
 
-## SLIDE 4 — Problem
+## SLIDE 4 — Architecture
+
+Title: GitHub → edge → AWS → agents & media APIs  
+Subtitle: Vercel web · Cloudflare DNS · ALB/ECS Fargate · RDS · Redis · S3 · Secrets.  
+Full-bleed content: embed `docs/Architecture_Diagram.png` (monorepo CI/CD → Cloudflare/Vercel → AWS ALB/ECS/RDS/Redis/S3 → OpenAI · ElevenLabs · Databricks · LangGraph).
+
+## SLIDE 5 — Problem
 
 Title: Serial audio wins on part-to-part retention. Production is still fragmented.
 
@@ -75,7 +81,7 @@ Six cards:
 5. No closed loop — wins don’t improve the next story
 6. Tool sprawl — briefing/writing/casting/mix/QA in five apps
 
-## SLIDE 5 — How it works
+## SLIDE 6 — How it works
 
 Title: One orchestrated pipeline — agents specialize, humans gate quality cliffs  
 Subtitle: Auto-run generation. Never auto-publish.
@@ -88,7 +94,7 @@ Four bands:
 3. Produce — Voice TTS+SFX; Director + Image for visuals/cover
 4. Assure — Editor listen; Audience Sim patches; human approvals
 
-## SLIDE 6 — Agents (seven)
+## SLIDE 7 — Agents (seven)
 
 Title: Seven specialized agents — one production studio
 
@@ -100,7 +106,7 @@ Title: Seven specialized agents — one production studio
 6. **Voice Agent** — Cast library voices; TTS + SFX (ElevenLabs / Sarvam)  
 7. **Image Agent** — Companion stills, cover art, visual track assets  
 
-## SLIDE 7 — Agent handoff
+## SLIDE 8 — Agent handoff
 
 Title: Who does what in sequence
 
@@ -113,7 +119,7 @@ Title: Who does what in sequence
 | Director + Image | Visual track | Shot plan · lookbook · stills · cover |
 | Human + Audience Sim | Quality gate | Approve · listen · patches |
 
-## SLIDE 8 — Close
+## SLIDE 9 — Close
 
 Title: Kahani  
 Line: Seven agents. One timeline. Human publish. Built for Pocket FM–scale serial production.  
@@ -124,7 +130,8 @@ Stack highlight: LangGraph · FastAPI · React · ElevenLabs/Sarvam · Gemini/Op
 
 ## RULES
 
-- Exactly 8 slides. Kahani not Kissa on slides.
+- Exactly 9 slides. Kahani not Kissa on slides.
+- Include `docs/Architecture_Diagram.png` on slide 4.
 - Include Databricks AI Search + Vector Search on stack slide.
 - List all 7 agents with the names above.
 - No calibrated “Pocket FM prediction” claims.

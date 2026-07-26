@@ -1,4 +1,3 @@
-import { BrandMark } from '@/components/brand/BrandMark'
 import { cn } from '@/lib/utils'
 
 import { CopyButton } from './CopyButton'
@@ -41,7 +40,6 @@ export function McpConnectionCard({ mcpUrl, live, className }: Props) {
 
       <div className="relative flex flex-col gap-5">
         <div className="flex flex-wrap items-center gap-3">
-          <BrandMark size={56} className="rounded-[12px] shadow-[0_4px_16px_rgba(230,25,77,0.12)]" />
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <h2 className="text-[18px] font-semibold tracking-tight text-[var(--text-primary)]">
