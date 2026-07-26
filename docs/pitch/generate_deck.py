@@ -13,7 +13,9 @@ from pptx.oxml.ns import qn
 from pptx.util import Inches, Pt
 
 ROOT = Path(__file__).resolve().parent
+DOCS = ROOT.parent
 ASSETS = ROOT / "assets"
+ARCH_DIAGRAM = DOCS / "Architecture_Diagram.png"
 OUT = ROOT / "Kahani_ZeroToOne_Pitch.pptx"
 
 BG = RGBColor(0x0F, 0x0F, 0x12)
@@ -32,7 +34,7 @@ CONTENT_TOP = Inches(1.82)
 FOOTER_Y = Inches(7.08)
 CONTENT_W = Inches(11.93)
 GAP = Inches(0.20)
-TOTAL_PAGES = 8
+TOTAL_PAGES = 9
 FONT = "Calibri"
 
 
@@ -152,6 +154,23 @@ def bullets(title: str, items: list[str], *, title_size=13, item_size=11):
         gap = 4 if i < len(items) - 1 else 0
         blocks.append((f"•  {item}", item_size, False, MUTED, gap))
     return blocks
+
+
+def _fit_picture(slide, path: Path, *, left, top, max_w, max_h):
+    """Place an image scaled to fit inside max_w × max_h, centered in that box."""
+    from PIL import Image
+
+    with Image.open(path) as im:
+        iw, ih = im.size
+    aspect = iw / ih
+    box_aspect = max_w / max_h
+    if aspect >= box_aspect:
+        w, h = max_w, max_w / aspect
+    else:
+        w, h = max_h * aspect, max_h
+    x = left + (max_w - w) / 2
+    y = top + (max_h - h) / 2
+    return slide.shapes.add_picture(str(path), x, y, width=w, height=h)
 
 
 # ── Slides ──────────────────────────────────────────────────────────────────
@@ -330,11 +349,45 @@ def slide_03_stack(prs):
     return s
 
 
-def slide_04_problem(prs):
+def slide_04_architecture(prs):
     s = blank(prs)
     _header(
         s,
-        "03  Problem",
+        "03  Architecture",
+        "GitHub → edge → AWS → agents & media APIs",
+        "Vercel web · Cloudflare DNS · ALB/ECS Fargate · RDS · Redis · S3 · Secrets.",
+    )
+    if ARCH_DIAGRAM.exists():
+        _fit_picture(
+            s,
+            ARCH_DIAGRAM,
+            left=MX,
+            top=CONTENT_TOP,
+            max_w=CONTENT_W,
+            max_h=Inches(4.95),
+        )
+    else:
+        _card(
+            s,
+            MX,
+            CONTENT_TOP,
+            CONTENT_W,
+            Inches(4.95),
+            [
+                ("Architecture diagram missing", 14, True, WHITE, 8),
+                (f"Expected at {ARCH_DIAGRAM}", 12, False, MUTED, 0),
+            ],
+            center=True,
+        )
+    _footer(s, 4)
+    return s
+
+
+def slide_05_problem(prs):
+    s = blank(prs)
+    _header(
+        s,
+        "04  Problem",
         "Serial audio wins on part-to-part retention. Production is still fragmented.",
         "Pocket FM–class storytelling needs speed, cultural specificity, and pre-publish signal.",
     )
@@ -358,15 +411,15 @@ def slide_04_problem(prs):
             [(t, 13, True, WHITE, 6), (d, 11, False, MUTED, 0)],
             accent=True,
         )
-    _footer(s, 4)
+    _footer(s, 5)
     return s
 
 
-def slide_05_how(prs):
+def slide_06_how(prs):
     s = blank(prs)
     _header(
         s,
-        "04  How it works",
+        "05  How it works",
         "One orchestrated pipeline — agents specialize, humans gate quality cliffs",
         "Auto-run generation. Never auto-publish.",
     )
@@ -422,15 +475,15 @@ def slide_05_how(prs):
             Inches(2.95),
             [(t.upper(), 11, True, ACCENT, 8), (d, 12, False, WHITE, 0)],
         )
-    _footer(s, 5)
+    _footer(s, 6)
     return s
 
 
-def slide_06_agents(prs):
+def slide_07_agents(prs):
     s = blank(prs)
     _header(
         s,
-        "05  Agents",
+        "06  Agents",
         "Seven specialized agents — one production studio",
         "Each owns a stage; the orchestrator sequences them with human approvals.",
     )
@@ -468,15 +521,15 @@ def slide_06_agents(prs):
             [(name, 12, True, WHITE, 6), (desc, 11, False, MUTED, 0)],
             accent=True,
         )
-    _footer(s, 6)
+    _footer(s, 7)
     return s
 
 
-def slide_07_flow_detail(prs):
+def slide_08_flow_detail(prs):
     s = blank(prs)
     _header(
         s,
-        "06  Agent handoff",
+        "07  Agent handoff",
         "Who does what in sequence",
         "Search grounds truth → writers lock story → voice & image produce → humans decide.",
     )
@@ -516,11 +569,11 @@ def slide_07_flow_detail(prs):
             row_h,
             [(detail, 11, False, MUTED, 0)],
         )
-    _footer(s, 7)
+    _footer(s, 8)
     return s
 
 
-def slide_08_close(prs):
+def slide_09_close(prs):
     s = blank(prs)
     _rect(s, Inches(0), Inches(0), Inches(0.12), SLIDE_H, fill=ACCENT)
     _label(s, MX, Inches(1.35), CONTENT_W, Inches(0.26), [("THANK YOU", 12, True, ACCENT, 0)])
@@ -573,7 +626,7 @@ def slide_08_close(prs):
             ),
         ],
     )
-    _footer(s, 8)
+    _footer(s, 9)
     return s
 
 
@@ -586,11 +639,12 @@ def main():
     slide_01_cover(prs)
     slide_02_built(prs)
     slide_03_stack(prs)
-    slide_04_problem(prs)
-    slide_05_how(prs)
-    slide_06_agents(prs)
-    slide_07_flow_detail(prs)
-    slide_08_close(prs)
+    slide_04_architecture(prs)
+    slide_05_problem(prs)
+    slide_06_how(prs)
+    slide_07_agents(prs)
+    slide_08_flow_detail(prs)
+    slide_09_close(prs)
 
     try:
         prs.save(OUT)
