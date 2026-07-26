@@ -1,5 +1,6 @@
 import {
   ChevronDown,
+  Download,
   FileStack,
   FolderKanban,
   ImageIcon,
@@ -19,6 +20,7 @@ const PROJECT_LINKS = [
   { segment: 'context', label: 'Story Bible', icon: Paperclip },
   { segment: 'drafts', label: 'Drafts', icon: FileStack },
   { segment: 'visuals', label: 'Visuals', icon: ImageIcon },
+  { segment: 'export', label: 'Export', icon: Download },
 ] as const
 
 type Props = {

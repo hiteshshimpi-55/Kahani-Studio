@@ -352,3 +352,25 @@ export async function getScriptAudioStatus(
   const res = await fetch(apiUrl(`/api/v1/projects/${projectId}/scripts/${scriptId}/audio`))
   return parseJson(res)
 }
+
+export interface ExportResult {
+  url: string
+  filename: string
+  expires_in: number | null
+}
+
+export async function exportScript(
+  projectId: string,
+  scriptId: string,
+  format: 'markdown' | 'audio' | 'cover',
+): Promise<ExportResult> {
+  const res = await fetch(
+    apiUrl(`/api/v1/projects/${projectId}/scripts/${scriptId}/export`),
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ format }),
+    },
+  )
+  return parseJson(res)
+}
