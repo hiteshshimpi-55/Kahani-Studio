@@ -1,4 +1,4 @@
-# Kissa
+# Kahani Studio
 
 Audio-first storytelling production monorepo (base infrastructure only).
 
