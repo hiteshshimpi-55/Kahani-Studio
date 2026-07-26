@@ -8,6 +8,7 @@ from app.schemas.projects.request import (
     ChatMessageRequest,
     CreateCharacterRequest,
     CreateProjectRequest,
+    ExportScriptRequest,
     GenerateScriptAudioRequest,
     PinScriptRequest,
     RejectStageRequest,
@@ -22,6 +23,7 @@ from app.schemas.projects.response import (
     ChatHistoryItem,
     ChatMessageResponse,
     ChatSessionResponse,
+    ExportScriptResponse,
     ProjectResponse,
     RunResponse,
     ScriptAudioStatusResponse,
@@ -443,6 +445,36 @@ async def get_script_audio_file(
 ) -> FileResponse:
     path = await _service(request, db).get_script_audio_file_path(project_id, script_id)
     return FileResponse(path, media_type="audio/mpeg", filename="episode.mp3")
+
+
+@router.post(
+    "/{project_id}/scripts/{script_id}/export",
+    response_model=ExportScriptResponse,
+)
+async def export_script(
+    project_id: str,
+    script_id: str,
+    body: ExportScriptRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+) -> ExportScriptResponse:
+    """Generate export artifact, store in S3 (or local DATA_DIR), return download URL."""
+    return await _service(request, db).export_script(project_id, script_id, body)
+
+
+@router.get("/{project_id}/scripts/{script_id}/export/{fmt}/file")
+async def serve_export_file(
+    project_id: str,
+    script_id: str,
+    fmt: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+) -> FileResponse:
+    """Serve a locally-stored export file (used when S3 is not configured)."""
+    path, media_type, filename = await _service(request, db).serve_export_file(
+        project_id, script_id, fmt
+    )
+    return FileResponse(path, media_type=media_type, filename=filename)
 
 
 @router.post("/{project_id}/runs/{run_id}/story-analysis", response_model=StoryAnalysisResponse)

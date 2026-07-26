@@ -31,6 +31,7 @@ from app.schemas.projects.request import (
     ChatMessageRequest,
     CreateCharacterRequest,
     CreateProjectRequest,
+    ExportScriptRequest,
     GenerateScriptAudioRequest,
     PinScriptRequest,
     RejectStageRequest,
@@ -45,6 +46,7 @@ from app.schemas.projects.response import (
     ChatHistoryItem,
     ChatMessageResponse,
     ChatSessionResponse,
+    ExportScriptResponse,
     ProjectResponse,
     RunArtifactsResponse,
     RunProgressResponse,
@@ -70,6 +72,7 @@ from app.services.chat.checkpoint_history import build_session_chat_history
 from app.services.chat.orchestrator import analyze_user_message
 from app.integrations.s3.storage import get_artifact_storage
 from app.services.projects.audio import (
+    audio_file_key,
     audio_file_path,
     read_audio_status,
     write_audio_status,
@@ -87,6 +90,7 @@ from app.services.projects.storage import (
     write_versioned_screenplay,
 )
 logger = logging.getLogger(__name__)
+
 
 DEFAULT_NARRATION = {
     "pov": "third_limited",
@@ -827,6 +831,99 @@ class ProjectsService:
             raise AppError(code="NOT_FOUND", message="Script not found", http_status_code=404)
         detail = await self._script_detail(script)
         return ScriptDetailResponse(**detail.model_dump())
+
+    async def export_script(
+        self, project_id: str, script_id: str, body: ExportScriptRequest
+    ) -> ExportScriptResponse:
+        import re as _re
+
+        project = await self._require_project(project_id)
+        script = await self._scripts.get(script_id)
+        if not script or script.project_id != project_id:
+            raise AppError(code="NOT_FOUND", message="Script not found", http_status_code=404)
+
+        storage = get_artifact_storage()
+        fmt = body.format
+
+        if fmt == "markdown":
+            screenplay = read_screenplay_artifact(script.screenplay_path)
+            package = script.package_json if isinstance(script.package_json, dict) else {}
+            title = package_title(package) or project.name
+            safe_title = _re.sub(r"[^\w\-]+", "-", title).strip("-") or "script"
+            filename = f"{safe_title}-v{script.version}.md"
+            key = f"projects/{project_id}/exports/{script_id}/{filename}"
+            storage.put_text(key, screenplay, content_type="text/markdown; charset=utf-8")
+
+            if storage.uses_s3:
+                from app.integrations.s3 import presigned_url as _presigned
+                url = _presigned(key, expires_in=settings.s3_presign_expires_sec)
+                return ExportScriptResponse(
+                    url=url, filename=filename, expires_in=settings.s3_presign_expires_sec
+                )
+            return ExportScriptResponse(
+                url=f"/api/v1/projects/{project_id}/scripts/{script_id}/export/markdown/file",
+                filename=filename,
+                expires_in=None,
+            )
+
+        elif fmt == "audio":
+            akey = audio_file_key(script.storage_dir)
+            if not storage.exists(akey):
+                raise AppError(
+                    code="NOT_FOUND", message="Audio not generated yet", http_status_code=404
+                )
+            if storage.uses_s3:
+                from app.integrations.s3 import presigned_url as _presigned
+                url = _presigned(akey, expires_in=settings.s3_presign_expires_sec)
+                return ExportScriptResponse(
+                    url=url, filename="episode.mp3", expires_in=settings.s3_presign_expires_sec
+                )
+            return ExportScriptResponse(
+                url=f"/api/v1/projects/{project_id}/scripts/{script_id}/audio/file",
+                filename="episode.mp3",
+                expires_in=None,
+            )
+
+        else:  # cover
+            run = await self._runs.get(script.run_id)
+            if not run or not run.cover_s3_key:
+                raise AppError(
+                    code="NOT_FOUND", message="Cover art not generated yet", http_status_code=404
+                )
+            if storage.uses_s3:
+                from app.integrations.s3 import presigned_url as _presigned
+                url = _presigned(run.cover_s3_key, expires_in=settings.s3_presign_expires_sec)
+                return ExportScriptResponse(
+                    url=url, filename="cover.png", expires_in=settings.s3_presign_expires_sec
+                )
+            return ExportScriptResponse(
+                url=f"/api/v1/projects/{project_id}/runs/{script.run_id}/cover",
+                filename="cover.png",
+                expires_in=None,
+            )
+
+    async def serve_export_file(
+        self, project_id: str, script_id: str, fmt: str
+    ) -> tuple[Path, str, str]:
+        """Return (local_path, media_type, filename) for a locally-stored export."""
+        await self._require_project(project_id)
+        script = await self._scripts.get(script_id)
+        if not script or script.project_id != project_id:
+            raise AppError(code="NOT_FOUND", message="Script not found", http_status_code=404)
+
+        if fmt != "markdown":
+            raise AppError(code="VALIDATION_ERROR", message="Invalid format", http_status_code=400)
+
+        storage = get_artifact_storage()
+        local_dir = storage.data_dir / "projects" / project_id / "exports" / script_id
+        if not local_dir.is_dir():
+            raise AppError(code="NOT_FOUND", message="Export not found — generate it first", http_status_code=404)
+        matches = list(local_dir.glob("*.md"))
+        if not matches:
+            raise AppError(code="NOT_FOUND", message="Export not found — generate it first", http_status_code=404)
+
+        path = matches[0]
+        return path, "text/markdown", path.name
 
     async def _script_detail(self, script) -> ScriptLatestResponse:
         screenplay = read_screenplay_artifact(script.screenplay_path)

@@ -182,3 +182,9 @@ class ChatHistoryItem(BaseModel):
     draft_script_id: str | None = None
     is_draft: bool = False
     run_status: str | None = None
+
+
+class ExportScriptResponse(BaseModel):
+    url: str
+    filename: str
+    expires_in: int | None = None
