@@ -5,6 +5,8 @@ import { AudienceSimPage } from '@/features/audience/pages/AudienceSimPage'
 import { ProjectChatPage } from '@/features/chat/pages/ProjectChatPage'
 import { DiscoverPage } from '@/features/discover/pages/DiscoverPage'
 import { EditorPage } from '@/features/editor/pages/EditorPage'
+import { LibraryPage } from '@/features/library/pages/LibraryPage'
+import { McpPage } from '@/features/mcp/pages/McpPage'
 import { ProjectContextPage } from '@/features/projects/pages/ProjectContextPage'
 import { ProjectDraftsPage } from '@/features/projects/pages/ProjectDraftsPage'
 import { ProjectExportPage } from '@/features/projects/pages/ProjectExportPage'
@@ -12,7 +14,6 @@ import { ProjectVisualsPage } from '@/features/projects/pages/ProjectVisualsPage
 import { ProjectsPage } from '@/features/projects/pages/ProjectsPage'
 import { NotFoundPage } from '@/features/system/pages/NotFoundPage'
 import { SystemStatusPage } from '@/features/system/pages/SystemStatusPage'
-import { LibraryPage } from '@/features/library/pages/LibraryPage'
 
 export const router = createBrowserRouter([
   {
@@ -22,6 +23,7 @@ export const router = createBrowserRouter([
       { index: true, element: <ProjectsPage /> },
       { path: 'discover', element: <DiscoverPage /> },
       { path: 'audience', element: <AudienceSimPage /> },
+      { path: 'mcp', element: <McpPage /> },
       { path: 'projects/:projectId', element: <Navigate to="chat" relative="path" replace /> },
       { path: 'projects/:projectId/chat', element: <ProjectChatPage /> },
       { path: 'projects/:projectId/context', element: <ProjectContextPage /> },

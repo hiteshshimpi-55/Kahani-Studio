@@ -1,5 +1,6 @@
 import {
   Activity,
+  Cable,
   ChevronsLeft,
   ChevronsRight,
   Compass,
@@ -121,6 +122,7 @@ export function AppShell() {
             <SidebarLink to="/editor" label="Editor" icon={PenLine} collapsed={collapsed} />
             <SidebarLink to="/library" label="Library" icon={Mic2} collapsed={collapsed} />
             <SidebarLink to="/audience" label="Audience Sim" icon={Users} collapsed={collapsed} />
+            <SidebarLink to="/mcp" label="MCP" icon={Cable} collapsed={collapsed} end />
             <SidebarLink
               to="/system"
               label="System"
